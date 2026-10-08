@@ -4,8 +4,8 @@ Pull requests and pushes to `main` run [.github/workflows/ci.yml](../.github/wor
 
 ## Pipeline
 
-**Active:** lint only. The **build** matrix and **ci-ok** jobs are commented out in
-`ci.yml` until we turn on 5-target release CI again.
+**Active:** lint only (`ci.yml`). Resource **budget gates** run separately in `budgets.yml`
+(LUM-004). The **build** matrix and **ci-ok** jobs remain commented out in `ci.yml`.
 
 | Job | Runner | What it does |
 | --- | --- | --- |

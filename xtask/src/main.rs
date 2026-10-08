@@ -1,5 +1,6 @@
 //! Workspace automation (`cargo xtask …`).
 
+mod budgets;
 mod ci;
 mod paths;
 
@@ -30,6 +31,9 @@ enum Commands {
     Ci(ci::CiCommands),
     /// Build the app and report binary size plus per-crate breakdown.
     Size(SizeArgs),
+    /// Resource budget gates (size + RAM scenarios).
+    #[command(subcommand)]
+    Budgets(budgets::BudgetsCommands),
 }
 
 #[derive(Parser)]
@@ -50,6 +54,7 @@ struct SizeArgs {
 fn main() -> Result<()> {
     match Cli::parse().command {
         Commands::Ci(cmd) => cmd.run(),
+        Commands::Budgets(cmd) => cmd.run(),
         Commands::Size(args) => run_size(args),
     }
 }

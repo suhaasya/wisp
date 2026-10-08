@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lumen – design mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#E9ECF1; --win:#FBFCFD; --side:#F1F3F7; --panel:#FFFFFF; --raise:#F6F7FA;
+  --ink:#1D222B; --ink2:#5A6372; --ink3:#8A93A3; --line:#DDE2E9; --line2:#E9ECF1;
+  --accent:#0E8A86; --accent-soft:#D7F0EE; --focus:#0E8A86;
+  --env-local:#3A9D5D; --env-dev:#3B7DD8; --env-staging:#C98516; --env-prod:#CF4136;
+  --mod:#FFF3C4; --mod-line:#E2B93B; --ins:#DDF4E3; --del:#FCE1DE;
+  --kw:#7A3EC2; --str:#2E7D46; --num:#B4561B; --fn:#1F68C4; --cm:#8A93A3;
+  --null:#A2AAB8; --shadow:0 18px 50px rgba(28,36,52,.16), 0 2px 6px rgba(28,36,52,.08);
+  --sans:"IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+:root[data-theme="dark"]{
+  --canvas:#0F1216; --win:#171B21; --side:#14181D; --panel:#1B2027; --raise:#212731;
+  --ink:#E4E8EE; --ink2:#A2ABBA; --ink3:#6F7888; --line:#2A313B; --line2:#232932;
+  --accent:#3CC2BC; --accent-soft:#16383A; --focus:#3CC2BC;
+  --mod:#3A3216; --mod-line:#B8902A; --ins:#173322; --del:#3D1D1B;
+  --kw:#C192FF; --str:#7BD08F; --num:#F0A26B; --fn:#7DB3FF; --cm:#6F7888;
+  --null:#5F6878; --shadow:0 18px 50px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0}
+body{background:var(--canvas);color:var(--ink);font:13px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+
+/* Presenter bar (outside the app window) */
+.deck{max-width:1320px;margin:0 auto;padding:22px 24px 14px;display:flex;flex-wrap:wrap;gap:14px 24px;align-items:end;justify-content:space-between}
+.deck h1{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+.deck p{margin:2px 0 0;color:var(--ink2);max-width:60ch}
+.switch{display:flex;flex-wrap:wrap;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px}
+.switch button{border:0;background:none;padding:6px 12px;border-radius:7px;color:var(--ink2);font-weight:500}
+.switch button[aria-pressed="true"]{background:var(--ink);color:var(--win)}
+.theme-btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 12px;color:var(--ink2)}
+
+/* App window */
+.stage{max-width:1320px;margin:0 auto;padding:0 24px 40px;overflow-x:auto}
+.window{min-width:1080px;height:780px;background:var(--win);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.titlebar{height:40px;display:flex;align-items:center;gap:12px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--side);position:relative;flex:none}
+.titlebar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--envc,transparent)}
+.lights{display:flex;gap:7px}
+.lights i{width:12px;height:12px;border-radius:50%;background:#E5605A}
+.lights i:nth-child(2){background:#E4B43E}.lights i:nth-child(3){background:#5BBE57}
+.title-center{flex:1;display:flex;justify-content:center;align-items:center;gap:8px;color:var(--ink2);font-size:12.5px;min-width:0}
+.title-center b{color:var(--ink);font-weight:600}
+.env{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;color:#fff;background:var(--envc)}
+.kbtn{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:3px 8px;color:var(--ink2);font-size:12px}
+kbd{font:500 11px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--raise);color:var(--ink2)}
+.screen{display:none;flex:1;min-height:0}
+.screen.on{display:flex}
+.status{height:26px;flex:none;border-top:1px solid var(--line);background:var(--side);display:flex;align-items:center;gap:16px;padding:0 12px;font-size:11.5px;color:var(--ink2)}
+.status .sp{flex:1}
+.mem{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono)}
+.mem .bar{width:54px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.mem .bar i{display:block;height:100%;background:var(--env-local)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--envc)}
+
+/* Common controls */
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:5px 11px;font-weight:500}
+.btn:hover{background:var(--raise)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .btn.primary{color:#0B1F1E}
+.btn.warn{border-color:var(--mod-line);background:var(--mod)}
+.input{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:6px 9px;width:100%}
+.input.mono{font-family:var(--mono);font-size:12.5px}
+label.f{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;font-weight:500}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:none;padding:4px 11px;color:var(--ink2)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:500}
+
+/* Screen 1: connections */
+.rail{width:210px;flex:none;background:var(--side);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.rail h3{font-size:12px;color:var(--ink3);font-weight:500;margin:10px 8px 6px}
+.rail a{display:flex;justify-content:space-between;padding:6px 8px;border-radius:6px;color:var(--ink);text-decoration:none}
+.rail a.cur{background:var(--accent-soft)}
+.rail a span{color:var(--ink3)}
+.home{flex:1;overflow:auto;padding:22px 28px}
+.home-top{display:flex;gap:10px;align-items:center;margin-bottom:6px}
+.home-top .input{max-width:360px}
+.hint{color:var(--ink3);font-size:12px;margin:0 0 18px}
+.hint code{font-family:var(--mono);font-size:11.5px;color:var(--ink2)}
+.group-name{font-weight:600;margin:18px 0 10px;font-size:13px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px 12px 18px;cursor:pointer;text-align:left;width:100%}
+.card::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 3px 3px 0;background:var(--envc)}
+.card:hover{border-color:var(--ink3)}
+.card .row1{display:flex;align-items:center;gap:9px}
+.eng{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font:600 11px var(--mono);color:#fff;flex:none}
+.eng.pg{background:#336791}.eng.my{background:#D1822B}.eng.mdb{background:#7A5B45}
+.card .nm{font-weight:600}
+.card .host{font-family:var(--mono);font-size:11.5px;color:var(--ink2);margin:8px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .meta{display:flex;gap:6px;flex-wrap:wrap;font-size:11.5px;color:var(--ink3)}
+.tag{border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--ink2);background:var(--raise)}
+.card .when{margin-left:auto}
+
+/* Screen 2: connection form */
+.formwrap{flex:1;display:grid;place-items:center;background:var(--canvas);padding:20px;overflow:auto}
+.sheet{width:640px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.sheet-h{padding:16px 20px 12px;border-bottom:1px solid var(--line2)}
+.sheet-h h2{margin:0 0 12px;font-size:15px;font-weight:600}
+.paste{display:flex;gap:8px;align-items:center}
+.tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:none;padding:10px 10px 9px;color:var(--ink2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--accent);font-weight:500}
+.pane{display:none;padding:16px 20px;gap:12px 14px;grid-template-columns:repeat(6,1fr)}
+.pane.on{display:grid}
+.c2{grid-column:span 2}.c3{grid-column:span 3}.c4{grid-column:span 4}.c6{grid-column:span 6}
+.envpick{display:flex;gap:6px;flex-wrap:wrap}
+.envpick button{display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:3px 10px 3px 8px;font-size:12px}
+.envpick button[aria-pressed="true"]{border-color:var(--envc);box-shadow:inset 0 0 0 1px var(--envc)}
+.check{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.check input{accent-color:var(--accent)}
+.sheet-f{display:flex;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid var(--line2);background:var(--raise)}
+.test-ok{flex:1;font-size:12px;color:var(--env-local);display:flex;align-items:center;gap:6px}
+.test-ok span{color:var(--ink2)}
+
+/* Screen 3: workspace */
+.side{width:240px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.side-top{padding:10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line2)}
+.dbsel{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:5px 9px}
+.tree{flex:1;overflow:auto;padding:6px 6px 12px;font-size:12.5px}
+.tree .grp{display:flex;align-items:center;gap:6px;padding:5px 6px;color:var(--ink2);font-weight:500;margin-top:4px}
+.tree .grp small{margin-left:auto;color:var(--ink3);font-weight:400}
+.tree .it{display:flex;align-items:center;gap:8px;padding:4px 6px 4px 22px;border-radius:5px;cursor:pointer;white-space:nowrap}
+.tree .it:hover{background:var(--raise)}
+.tree .it.cur{background:var(--accent-soft);font-weight:500}
+.ico{width:12px;height:12px;flex:none;border:1.5px solid var(--ink3);border-radius:2px;position:relative}
+.ico::after{content:"";position:absolute;left:0;right:0;top:3px;border-top:1.5px solid var(--ink3)}
+.ico.v{border-radius:50%}.ico.v::after{display:none}
+.ico.fn{border:0;font:600 10px/12px var(--mono);color:var(--ink3)}
+.ico.fn::after{display:none}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.wtabs{display:flex;height:34px;background:var(--side);border-bottom:1px solid var(--line);flex:none}
+.wtab{display:flex;align-items:center;gap:8px;padding:0 14px;border-right:1px solid var(--line);color:var(--ink2);font-size:12.5px;cursor:pointer}
+.wtab.cur{background:var(--win);color:var(--ink);font-weight:500;box-shadow:inset 0 2px 0 var(--accent)}
+.wtab .x{color:var(--ink3)}
+.toolbar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);flex:none}
+.toolbar .sp{flex:1}
+.filter{display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--raise);flex:none}
+.filter select,.filter input{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:3px 7px;font-size:12px}
+.filter input{font-family:var(--mono);width:200px}
+.split{flex:1;display:flex;min-height:0}
+.gridwrap{flex:1;overflow:auto;min-width:0}
+table.grid{border-collapse:separate;border-spacing:0;font:12.5px/1 var(--mono);min-width:100%}
+.grid th{position:sticky;top:0;z-index:2;background:var(--side);text-align:left;font:500 12px var(--sans);color:var(--ink2);padding:7px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line2);white-space:nowrap}
+.grid th small{display:block;font:400 10.5px var(--mono);color:var(--ink3);margin-top:2px}
+.grid th.rn,.grid td.rn{position:sticky;left:0;z-index:1;background:var(--side);color:var(--ink3);text-align:right;width:44px;font-size:11px}
+.grid th.rn{z-index:3}
+.grid td{height:26px;padding:0 10px;border-bottom:1px solid var(--line2);border-right:1px solid var(--line2);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.grid tr:hover td{background:var(--raise)}
+.grid tr.sel td{background:var(--accent-soft)}
+.grid td.num{text-align:right}
+.grid td.null{color:var(--null);font-style:italic}
+.grid td.mod{background:var(--mod)!important;box-shadow:inset 0 0 0 1px var(--mod-line)}
+.grid tr.ins td{background:var(--ins)}
+.grid tr.del td{background:var(--del);text-decoration:line-through;color:var(--ink3)}
+.pill{display:inline-block;padding:2px 7px;border-radius:999px;font:500 11px var(--sans);background:var(--raise);border:1px solid var(--line)}
+.pill.paid{color:var(--env-local)}.pill.shipped{color:var(--env-dev)}.pill.pending{color:var(--env-staging)}.pill.refunded{color:var(--env-prod)}
+.detail{width:280px;flex:none;border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px 14px}
+.detail h4{margin:0 0 2px;font-size:13px;font-weight:600}
+.detail .sub{color:var(--ink3);font-size:11.5px;margin-bottom:12px}
+.fld{margin-bottom:10px}
+.fld label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink2);margin-bottom:3px}
+.fld label em{font-style:normal;color:var(--ink3);font-family:var(--mono);font-size:10.5px}
+.fld .input{font-family:var(--mono);font-size:12px;padding:5px 8px}
+.fk{color:var(--accent);text-decoration:none;font-size:11.5px}
+
+/* Screen 4: SQL */
+.editor{height:250px;flex:none;display:flex;border-bottom:1px solid var(--line);font:13px/21px var(--mono);background:var(--panel)}
+.gutter{padding:10px 10px 10px 14px;text-align:right;color:var(--ink3);user-select:none;background:var(--side);border-right:1px solid var(--line2)}
+.code{padding:10px 14px;white-space:pre;overflow:auto;flex:1}
+.code .k{color:var(--kw);font-weight:500}.code .s{color:var(--str)}.code .n{color:var(--num)}.code .f{color:var(--fn)}.code .c{color:var(--cm);font-style:italic}
+.code .cur-line{background:var(--raise);display:inline-block;width:100%}
+.ac{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);font:12.5px var(--mono);min-width:250px;padding:4px;z-index:5}
+.ac div{display:flex;justify-content:space-between;gap:20px;padding:4px 8px;border-radius:5px}
+.ac div.cur{background:var(--accent-soft)}
+.ac small{color:var(--ink3);font-family:var(--sans)}
+.rtabs{display:flex;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid var(--line);height:34px;flex:none}
+.rtabs button{border:0;background:none;padding:8px 10px;color:var(--ink2);border-bottom:2px solid transparent}
+.rtabs button[aria-selected="true"]{color:var(--ink);border-color:var(--accent);font-weight:500}
+.rtabs .meta{margin-left:auto;font-size:11.5px;color:var(--ink3)}
+
+/* Screen 5: structure */
+.struct{flex:1;overflow:auto;padding:14px 16px;display:grid;grid-template-columns:1fr 340px;gap:16px;align-content:start}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.box h5{margin:0;padding:10px 12px;font-size:12.5px;font-weight:600;border-bottom:1px solid var(--line2);display:flex;justify-content:space-between;align-items:center}
+.box table{width:100%;border-collapse:collapse;font-size:12.5px}
+.box td,.box th{padding:7px 12px;border-bottom:1px solid var(--line2);text-align:left;white-space:nowrap}
+.box th{font-weight:500;color:var(--ink2);font-size:12px;background:var(--raise)}
+.box td.m{font-family:var(--mono);font-size:12px}
+.box tr.mod td{background:var(--mod)}
+.box tr.ins td{background:var(--ins)}
+.ddl{font:12px/19px var(--mono);padding:12px;white-space:pre-wrap;margin:0}
+.ddl .k{color:var(--kw)}
+
+/* Overlays */
+.scrim{position:absolute;inset:40px 0 0;background:rgba(15,20,28,.28);display:none;align-items:flex-start;justify-content:center;padding-top:80px;z-index:20}
+.scrim.on{display:flex}
+.palette{width:560px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.palette input{border:0;border-bottom:1px solid var(--line);width:100%;padding:14px 16px;font-size:15px;background:none;outline:none}
+.palette ul{list-style:none;margin:0;padding:6px;max-height:330px;overflow:auto}
+.palette li{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px}
+.palette li.cur{background:var(--accent-soft)}
+.palette li small{margin-left:auto;color:var(--ink3)}
+.palette .sec{font-size:11.5px;color:var(--ink3);padding:8px 10px 4px}
+.review{width:620px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.review header{padding:14px 18px;border-bottom:1px solid var(--line2)}
+.review header h3{margin:0;font-size:15px}
+.review header p{margin:4px 0 0;color:var(--ink2);font-size:12.5px}
+.review pre{margin:0;padding:14px 18px;font:12.5px/20px var(--mono);background:var(--raise);white-space:pre-wrap}
+.review pre .k{color:var(--kw);font-weight:500}.review pre .s{color:var(--str)}.review pre .n{color:var(--num)}
+.review footer{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--line2)}
+.review footer .note{flex:1;font-size:12px;color:var(--ink2)}
+
+.notes{max-width:1320px;margin:0 auto;padding:0 24px 48px;color:var(--ink2);display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px 28px}
+.notes h2{grid-column:1/-1;font-size:14px;color:var(--ink);margin:0 0 2px}
+.notes p{margin:0;font-size:12.5px}
+.notes b{color:var(--ink);font-weight:600}
+@media (prefers-reduced-motion:no-preference){.scrim.on .palette,.scrim.on .review{animation:pop .14s ease-out}}
+@keyframes pop{from{transform:translateY(-6px);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+
+<div class="deck">
+  <div>
+    <h1>Lumen design mockup</h1>
+    <p>A native MySQL and PostgreSQL client built on Rust and GPUI. Click through the screens; in the table view, double-click a cell to stage an edit, then review the SQL before it runs.</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div class="switch" role="group" aria-label="Screen">
+      <button data-go="home" aria-pressed="true">Connections</button>
+      <button data-go="form" aria-pressed="false">New connection</button>
+      <button data-go="data" aria-pressed="false">Table data</button>
+      <button data-go="sql" aria-pressed="false">SQL query</button>
+      <button data-go="struct" aria-pressed="false">Structure</button>
+    </div>
+    <button class="theme-btn" id="theme">Dark theme</button>
+  </div>
+</div>
+
+<div class="stage">
+<div class="window" id="win" style="--envc:transparent">
+
+  <div class="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="title-center" id="ttl"><b>Lumen</b></div>
+    <button class="kbtn" id="openPal"><span>Search or run a command</span><kbd>⌘K</kbd></button>
+  </div>
+
+  <!-- 1. Connections -->
+  <section class="screen on" id="s-home">
+    <nav class="rail" aria-label="Connection folders">
+      <h3>Folders</h3>
+      <a href="#" class="cur">All connections <span>9</span></a>
+      <a href="#">Acme backend <span>4</span></a>
+      <a href="#">Side projects <span>3</span></a>
+      <a href="#">Local Docker <span>2</span></a>
+      <h3>Environment</h3>
+      <a href="#"><span style="display:flex;gap:8px;align-items:center;color:var(--ink)"><i class="dot" style="--envc:var(--env-prod)"></i>Production</span><span>2</span></a>
+      <a href="#"><span style="display:flex;gap:8px;align-items:center;color:var(--ink)"><i class="dot" style="--envc:var(--env-staging)"></i>Staging</span><span>2</span></a>
+      <a href="#"><span style="display:flex;gap:8px;align-items:center;color:var(--ink)"><i class="dot" style="--envc:var(--env-dev)"></i>Development</span><span>3</span></a>
+      <a href="#"><span style="display:flex;gap:8px;align-items:center;color:var(--ink)"><i class="dot" style="--envc:var(--env-local)"></i>Local</span><span>2</span></a>
+    </nav>
+    <div class="home">
+      <div class="home-top">
+        <input class="input" placeholder="Search connections" aria-label="Search connections">
+        <button class="btn primary" data-go="form">New connection</button>
+        <button class="btn">Import</button>
+      </div>
+      <p class="hint">Paste a URL anywhere to create a connection, e.g. <code>postgres://app@db.example.com:5432/shop?sslmode=require</code></p>
+
+      <div class="group-name">Acme backend</div>
+      <div class="cards">
+        <button class="card" style="--envc:var(--env-prod)" data-go="data">
+          <div class="row1"><span class="eng pg">PG</span><span class="nm">shop_prod</span><span class="env" style="margin-left:auto">Production</span></div>
+          <div class="host">db-prod-1.internal:5432</div>
+          <div class="meta"><span class="tag">SSH via bastion.acme.io</span><span class="tag">TLS verify-full</span><span class="tag">Read-only</span></div>
+        </button>
+        <button class="card" style="--envc:var(--env-staging)" data-go="data">
+          <div class="row1"><span class="eng pg">PG</span><span class="nm">shop_staging</span><span class="when" style="color:var(--ink3);font-size:11.5px">2 h ago</span></div>
+          <div class="host">shop-stg.c8x1.eu-west-1.rds.amazonaws.com</div>
+          <div class="meta"><span class="tag">TLS require</span><span class="tag">AWS RDS</span></div>
+        </button>
+        <button class="card" style="--envc:var(--env-prod)" data-go="data">
+          <div class="row1"><span class="eng my">MY</span><span class="nm">billing</span><span class="env" style="margin-left:auto">Production</span></div>
+          <div class="host">10.20.4.11:3306</div>
+          <div class="meta"><span class="tag">SSH 2 hops</span><span class="tag">MySQL 8.4</span></div>
+        </button>
+        <button class="card" style="--envc:var(--env-dev)" data-go="data">
+          <div class="row1"><span class="eng mdb">MDB</span><span class="nm">analytics_dev</span><span class="when" style="color:var(--ink3);font-size:11.5px">yesterday</span></div>
+          <div class="host">dev-maria.acme.io:3306</div>
+          <div class="meta"><span class="tag">MariaDB 11.4</span></div>
+        </button>
+      </div>
+
+      <div class="group-name">Side projects</div>
+      <div class="cards">
+        <button class="card" style="--envc:var(--env-dev)" data-go="data">
+          <div class="row1"><span class="eng pg">PG</span><span class="nm">habit-app</span><span class="when" style="color:var(--ink3);font-size:11.5px">3 days ago</span></div>
+          <div class="host">db.qwerty.supabase.co:5432</div>
+          <div class="meta"><span class="tag">Supabase</span><span class="tag">TLS require</span></div>
+        </button>
+        <button class="card" style="--envc:var(--env-dev)" data-go="data">
+          <div class="row1"><span class="eng pg">PG</span><span class="nm">blog</span><span class="when" style="color:var(--ink3);font-size:11.5px">last week</span></div>
+          <div class="host">ep-cool-fog.ap-south-1.aws.neon.tech</div>
+          <div class="meta"><span class="tag">Neon</span><span class="tag">Pooled</span></div>
+        </button>
+        <button class="card" style="--envc:var(--env-staging)" data-go="data">
+          <div class="row1"><span class="eng my">MY</span><span class="nm">store-preview</span><span class="when" style="color:var(--ink3);font-size:11.5px">last month</span></div>
+          <div class="host">aws.connect.psdb.cloud:3306</div>
+          <div class="meta"><span class="tag">PlanetScale</span><span class="tag">TLS verify-ca</span></div>
+        </button>
+      </div>
+
+      <div class="group-name">Local Docker</div>
+      <div class="cards">
+        <button class="card" style="--envc:var(--env-local)" data-go="data">
+          <div class="row1"><span class="eng pg">PG</span><span class="nm">postgres 17</span><span class="when" style="color:var(--ink3);font-size:11.5px">10 min ago</span></div>
+          <div class="host">/tmp/.s.PGSQL.5432</div>
+          <div class="meta"><span class="tag">Unix socket</span><span class="tag">trust</span></div>
+        </button>
+        <button class="card" style="--envc:var(--env-local)" data-go="data">
+          <div class="row1"><span class="eng my">MY</span><span class="nm">mysql 8</span><span class="when" style="color:var(--ink3);font-size:11.5px">today</span></div>
+          <div class="host">127.0.0.1:3307</div>
+          <div class="meta"><span class="tag">TCP</span></div>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Connection form -->
+  <section class="screen" id="s-form">
+    <div class="formwrap">
+      <div class="sheet" role="dialog" aria-label="New connection">
+        <div class="sheet-h">
+          <h2>New connection</h2>
+          <div class="paste">
+            <input class="input mono" value="postgres://app_ro@db-prod-1.internal:5432/shop_prod?sslmode=verify-full" aria-label="Connection URL">
+            <button class="btn">Fill from URL</button>
+          </div>
+        </div>
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" data-pane="p-gen">General</button>
+          <button role="tab" aria-selected="false" data-pane="p-ssh">SSH tunnel</button>
+          <button role="tab" aria-selected="false" data-pane="p-ssl">SSL / TLS</button>
+          <button role="tab" aria-selected="false" data-pane="p-adv">Advanced</button>
+        </div>
+
+        <div class="pane on" id="p-gen">
+          <div class="c6"><label class="f">Database type</label>
+            <div class="seg" role="group"><button aria-pressed="true">PostgreSQL</button><button aria-pressed="false">MySQL</button><button aria-pressed="false">MariaDB</button></div></div>
+          <div class="c4"><label class="f" for="n1">Name</label><input id="n1" class="input" value="shop_prod"></div>
+          <div class="c2"><label class="f" for="n2">Folder</label><select id="n2" class="input"><option>Acme backend</option><option>Side projects</option></select></div>
+          <div class="c6"><label class="f">Connect using</label>
+            <div class="seg" role="group"><button aria-pressed="true">Host and port</button><button aria-pressed="false">Socket</button><button aria-pressed="false">Named pipe</button></div></div>
+          <div class="c4"><label class="f" for="n3">Host</label><input id="n3" class="input mono" value="db-prod-1.internal"></div>
+          <div class="c2"><label class="f" for="n4">Port</label><input id="n4" class="input mono" value="5432"></div>
+          <div class="c2"><label class="f" for="n5">User</label><input id="n5" class="input mono" value="app_ro"></div>
+          <div class="c2"><label class="f" for="n6">Password</label><input id="n6" class="input" type="password" value="supersecret"></div>
+          <div class="c2"><label class="f" for="n7">Database</label><input id="n7" class="input mono" value="shop_prod"></div>
+          <div class="c6"><label class="check"><input type="checkbox" checked> Save password in system keychain</label></div>
+          <div class="c6"><label class="f">Environment</label>
+            <div class="envpick" role="group">
+              <button aria-pressed="false" style="--envc:var(--env-local)"><i class="dot"></i>Local</button>
+              <button aria-pressed="false" style="--envc:var(--env-dev)"><i class="dot"></i>Development</button>
+              <button aria-pressed="false" style="--envc:var(--env-staging)"><i class="dot"></i>Staging</button>
+              <button aria-pressed="true" style="--envc:var(--env-prod)"><i class="dot"></i>Production</button>
+            </div></div>
+          <div class="c3"><label class="check"><input type="checkbox" checked> Read-only connection</label></div>
+          <div class="c3"><label class="check"><input type="checkbox" checked> Confirm every write</label></div>
+        </div>
+
+        <div class="pane" id="p-ssh">
+          <div class="c6"><label class="check"><input type="checkbox" checked> Connect through an SSH tunnel</label></div>
+          <div class="c4"><label class="f">SSH host</label><input class="input mono" value="bastion.acme.io"></div>
+          <div class="c2"><label class="f">Port</label><input class="input mono" value="22"></div>
+          <div class="c3"><label class="f">SSH user</label><input class="input mono" value="deploy"></div>
+          <div class="c3"><label class="f">Authentication</label><select class="input"><option>Private key</option><option>ssh-agent</option><option>Password</option><option>From ~/.ssh/config</option></select></div>
+          <div class="c4"><label class="f">Private key</label><input class="input mono" value="~/.ssh/id_ed25519"></div>
+          <div class="c2"><label class="f">Passphrase</label><input class="input" type="password" value="••••••"></div>
+          <div class="c6"><button class="btn">Add jump host</button></div>
+        </div>
+
+        <div class="pane" id="p-ssl">
+          <div class="c6"><label class="f">SSL mode</label>
+            <div class="seg" role="group"><button aria-pressed="false">Disable</button><button aria-pressed="false">Prefer</button><button aria-pressed="false">Require</button><button aria-pressed="false">Verify CA</button><button aria-pressed="true">Verify full</button></div></div>
+          <div class="c6"><label class="f">CA certificate</label><input class="input mono" value="Use system trust store"></div>
+          <div class="c3"><label class="f">Client certificate</label><input class="input mono" placeholder="Optional .crt or .pem"></div>
+          <div class="c3"><label class="f">Client key</label><input class="input mono" placeholder="Optional .key"></div>
+        </div>
+
+        <div class="pane" id="p-adv">
+          <div class="c3"><label class="f">Default schema</label><input class="input mono" value="public"></div>
+          <div class="c3"><label class="f">Session time zone</label><input class="input mono" value="UTC"></div>
+          <div class="c3"><label class="f">Statement timeout</label><input class="input mono" value="30s"></div>
+          <div class="c3"><label class="f">Keep-alive interval</label><input class="input mono" value="60s"></div>
+          <div class="c6"><label class="f">Run on connect</label><input class="input mono" value="SET application_name = 'lumen';"></div>
+        </div>
+
+        <div class="sheet-f">
+          <div class="test-ok">● Connected in 42 ms <span>PostgreSQL 16.4, TLS 1.3, via SSH</span></div>
+          <button class="btn">Test</button>
+          <button class="btn" data-go="home">Save</button>
+          <button class="btn primary" data-go="data">Save and connect</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Table data -->
+  <section class="screen" id="s-data">
+    <aside class="side">
+      <div class="side-top">
+        <div class="dbsel"><span><b>shop_prod</b> <span style="color:var(--ink3)">/ public</span></span><span style="color:var(--ink3)">▾</span></div>
+        <input class="input" placeholder="Filter objects" style="padding:5px 8px;font-size:12.5px" aria-label="Filter objects">
+      </div>
+      <div class="tree" id="tree"></div>
+    </aside>
+    <div class="main">
+      <div class="wtabs">
+        <div class="wtab cur">orders <span class="x">×</span></div>
+        <div class="wtab">customers <span class="x">×</span></div>
+        <div class="wtab" data-go="sql">Query 1 <span class="x">×</span></div>
+      </div>
+      <div class="toolbar">
+        <div class="seg" role="group"><button aria-pressed="true">Data</button><button aria-pressed="false" data-go="struct">Structure</button></div>
+        <button class="btn">Add row</button>
+        <button class="btn" id="delRow">Delete row</button>
+        <div class="sp"></div>
+        <button class="btn">Export</button>
+        <button class="btn">Discard</button>
+        <button class="btn warn" id="reviewBtn">Review SQL <span id="stagedN">(3)</span></button>
+      </div>
+      <div class="filter">
+        <select aria-label="Column"><option>status</option><option>total</option><option>customer_id</option></select>
+        <select aria-label="Operator"><option>=</option><option>!=</option><option>IN</option><option>LIKE</option><option>IS NULL</option></select>
+        <input value="'paid'" aria-label="Value">
+        <button class="btn" style="padding:3px 10px;font-size:12px">Apply</button>
+        <span style="color:var(--ink3);font-size:12px;margin-left:6px">Sorted by created_at desc</span>
+      </div>
+      <div class="split">
+        <div class="gridwrap"><table class="grid" id="grid"></table></div>
+        <aside class="detail" id="detail"></aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. SQL -->
+  <section class="screen" id="s-sql">
+    <aside class="side">
+      <div class="side-top">
+        <div class="dbsel"><span><b>shop_prod</b> <span style="color:var(--ink3)">/ public</span></span><span style="color:var(--ink3)">▾</span></div>
+        <input class="input" placeholder="Filter objects" style="padding:5px 8px;font-size:12.5px" aria-label="Filter objects">
+      </div>
+      <div class="tree" id="tree2"></div>
+    </aside>
+    <div class="main">
+      <div class="wtabs">
+        <div class="wtab" data-go="data">orders <span class="x">×</span></div>
+        <div class="wtab">customers <span class="x">×</span></div>
+        <div class="wtab cur">Query 1 <span class="x">×</span></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn primary">Run statement <kbd style="margin-left:6px;background:transparent;color:inherit;border-color:rgba(255,255,255,.4)">⌘↵</kbd></button>
+        <button class="btn">Run all</button>
+        <button class="btn">Explain</button>
+        <button class="btn">Format</button>
+        <div class="sp"></div>
+        <button class="btn">History</button>
+        <button class="btn">Save snippet</button>
+      </div>
+      <div class="editor" style="position:relative">
+        <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10</div>
+<div class="code"><span class="c">-- Top customers by revenue, last 30 days</span>
+<span class="k">SELECT</span> c.id, c.email, <span class="f">count</span>(o.id) <span class="k">AS</span> orders,
+       <span class="f">sum</span>(o.total) <span class="k">AS</span> revenue
+<span class="k">FROM</span> customers c
+<span class="k">JOIN</span> orders o <span class="k">ON</span> o.customer_id = c.id
+<span class="k">WHERE</span> o.status = <span class="s">'paid'</span>
+  <span class="k">AND</span> o.created_at &gt; <span class="f">now</span>() - <span class="k">interval</span> <span class="s">'30 days'</span>
+<span class="k">GROUP BY</span> c.id, c.email
+<span class="k">ORDER BY</span> revenue <span class="k">DESC</span>
+<span class="cur-line"><span class="k">LIMIT</span> <span class="n">50</span>; </span></div>
+        <div class="ac" style="left:150px;top:118px" aria-hidden="true">
+          <div class="cur"><span>created_at</span><small>timestamptz · orders</small></div>
+          <div><span>currency</span><small>char(3) · orders</small></div>
+          <div><span>customer_id</span><small>bigint · orders</small></div>
+        </div>
+      </div>
+      <div class="rtabs" role="tablist">
+        <button role="tab" aria-selected="true">Result 1</button>
+        <button role="tab" aria-selected="false">Explain</button>
+        <button role="tab" aria-selected="false">Messages</button>
+        <span class="meta">50 rows · 31 ms</span>
+      </div>
+      <div class="split"><div class="gridwrap"><table class="grid" id="grid2"></table></div></div>
+    </div>
+  </section>
+
+  <!-- 5. Structure -->
+  <section class="screen" id="s-struct">
+    <aside class="side">
+      <div class="side-top">
+        <div class="dbsel"><span><b>shop_prod</b> <span style="color:var(--ink3)">/ public</span></span><span style="color:var(--ink3)">▾</span></div>
+        <input class="input" placeholder="Filter objects" style="padding:5px 8px;font-size:12.5px" aria-label="Filter objects">
+      </div>
+      <div class="tree" id="tree3"></div>
+    </aside>
+    <div class="main">
+      <div class="wtabs">
+        <div class="wtab cur">orders <span class="x">×</span></div>
+        <div class="wtab">customers <span class="x">×</span></div>
+        <div class="wtab" data-go="sql">Query 1 <span class="x">×</span></div>
+      </div>
+      <div class="toolbar">
+        <div class="seg" role="group"><button aria-pressed="false" data-go="data">Data</button><button aria-pressed="true">Structure</button></div>
+        <button class="btn">Add column</button>
+        <button class="btn">Add index</button>
+        <div class="sp"></div>
+        <button class="btn">Discard</button>
+        <button class="btn warn">Review SQL (2)</button>
+      </div>
+      <div class="struct">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="box">
+            <h5>Columns <span style="color:var(--ink3);font-weight:400">8</span></h5>
+            <table>
+              <tr><th>Name</th><th>Type</th><th>Nullable</th><th>Default</th><th>Key</th></tr>
+              <tr><td class="m">id</td><td class="m">bigint</td><td>No</td><td class="m">nextval('orders_id_seq')</td><td>Primary</td></tr>
+              <tr><td class="m">customer_id</td><td class="m">bigint</td><td>No</td><td></td><td>FK customers.id</td></tr>
+              <tr><td class="m">status</td><td class="m">order_status</td><td>No</td><td class="m">'pending'</td><td></td></tr>
+              <tr class="mod"><td class="m">total</td><td class="m">numeric(12,2)</td><td>No</td><td class="m">0</td><td></td></tr>
+              <tr><td class="m">currency</td><td class="m">char(3)</td><td>No</td><td class="m">'INR'</td><td></td></tr>
+              <tr><td class="m">created_at</td><td class="m">timestamptz</td><td>No</td><td class="m">now()</td><td></td></tr>
+              <tr><td class="m">shipped_at</td><td class="m">timestamptz</td><td>Yes</td><td></td><td></td></tr>
+              <tr class="ins"><td class="m">notes</td><td class="m">text</td><td>Yes</td><td></td><td></td></tr>
+            </table>
+          </div>
+          <div class="box">
+            <h5>Indexes <span style="color:var(--ink3);font-weight:400">3</span></h5>
+            <table>
+              <tr><th>Name</th><th>Columns</th><th>Type</th><th>Unique</th></tr>
+              <tr><td class="m">orders_pkey</td><td class="m">id</td><td>btree</td><td>Yes</td></tr>
+              <tr><td class="m">orders_customer_idx</td><td class="m">customer_id</td><td>btree</td><td>No</td></tr>
+              <tr><td class="m">orders_created_idx</td><td class="m">created_at DESC</td><td>btree</td><td>No</td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="box" style="align-self:start">
+          <h5>Pending changes</h5>
+<pre class="ddl"><span class="k">ALTER TABLE</span> public.orders
+  <span class="k">ALTER COLUMN</span> total <span class="k">TYPE</span> numeric(12,2);
+
+<span class="k">ALTER TABLE</span> public.orders
+  <span class="k">ADD COLUMN</span> notes text;</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="status" id="status"></footer>
+
+  <!-- Command palette -->
+  <div class="scrim" id="pal" role="dialog" aria-label="Command palette">
+    <div class="palette">
+      <input placeholder="Type a table, action or connection" value="ord" aria-label="Command">
+      <ul>
+        <li class="sec">Tables</li>
+        <li class="cur"><span class="ico"></span>orders <small>shop_prod.public</small></li>
+        <li><span class="ico"></span>order_items <small>shop_prod.public</small></li>
+        <li class="sec">Actions</li>
+        <li>Export orders to CSV <small>⇧⌘E</small></li>
+        <li>Open orders structure <small>⌘2</small></li>
+        <li class="sec">Connections</li>
+        <li><i class="dot" style="--envc:var(--env-dev)"></i>store-preview <small>PlanetScale</small></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Review SQL -->
+  <div class="scrim" id="rev" role="dialog" aria-label="Review changes">
+    <div class="review">
+      <header>
+        <h3>Review 3 changes to orders</h3>
+        <p>These statements run in one transaction on shop_prod (Production).</p>
+      </header>
+<pre id="revSql"></pre>
+      <footer>
+        <span class="note">Nothing is written until you commit.</span>
+        <button class="btn" id="revCancel">Keep editing</button>
+        <button class="btn primary" id="revCommit">Commit changes</button>
+      </footer>
+    </div>
+  </div>
+</div>
+</div>
+
+<section class="notes">
+  <h2>Design notes</h2>
+  <p><b>Environment is always visible.</b> The colour of the line under the title bar, the card edge and the status bar dot all follow the connection's environment, so production never looks like local.</p>
+  <p><b>Edits are staged.</b> Changed cells turn yellow, new rows green, deleted rows red and struck through. Nothing runs until the user reviews the generated SQL and commits.</p>
+  <p><b>Memory is on screen.</b> The status bar shows the app's resident memory against its budget, a visible promise that the app stays small.</p>
+  <p><b>Native-friendly shapes.</b> Every element here maps to GPUI primitives: divs with flex layout, uniform list for the virtualised grid, text runs for the editor. No web views.</p>
+</section>
+
+<script>
+(function(){
+  var win = document.getElementById('win');
+  var ttl = document.getElementById('ttl');
+  var status = document.getElementById('status');
+  var staged = 3;
+
+  var screens = {
+    home:  {env:'transparent', title:'<b>Lumen</b>', status:'<span>9 saved connections</span><span class="sp"></span>' + mem(34)},
+    form:  {env:'transparent', title:'<b>Lumen</b><span>New connection</span>', status:'<span>Secrets are stored in the system keychain</span><span class="sp"></span>' + mem(35)},
+    data:  {env:'var(--env-prod)', title:titleProd(), status:null},
+    sql:   {env:'var(--env-prod)', title:titleProd(), status:'<span><i class="dot"></i> Production, read-only</span><span>PostgreSQL 16.4</span><span>Latency 18 ms</span><span class="sp"></span><span>50 rows in 31 ms</span>' + mem(49)},
+    struct:{env:'var(--env-prod)', title:titleProd(), status:'<span><i class="dot"></i> Production</span><span>PostgreSQL 16.4</span><span class="sp"></span><span>2 structure changes pending</span>' + mem(47)}
+  };
+  function titleProd(){return '<span class="env">Production</span><b>shop_prod</b><span>app_ro@db-prod-1.internal via SSH bastion.acme.io</span>';}
+  function mem(mb){var pct=Math.round(mb/60*100);return '<span class="mem" title="Idle budget 60 MB">'+mb+' MB<span class="bar"><i style="width:'+pct+'%"></i></span></span>';}
+  function dataStatus(){return '<span><i class="dot"></i> Production, read-only</span><span>PostgreSQL 16.4</span><span>Latency 18 ms</span><span class="sp"></span><span>Rows 1–300 of 1,248,920</span><span>18 ms</span><span style="color:var(--env-staging)">'+staged+' staged changes</span>' + mem(52);}
+
+  function go(name){
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('on', s.id==='s-'+name);});
+    document.querySelectorAll('.switch button').forEach(function(b){b.setAttribute('aria-pressed', b.dataset.go===name);});
+    var s = screens[name];
+    win.style.setProperty('--envc', s.env);
+    ttl.innerHTML = s.title;
+    status.innerHTML = s.status || dataStatus();
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('[data-go]');
+    if(t){ e.preventDefault(); go(t.dataset.go); }
+  });
+
+  // Theme
+  var themeBtn = document.getElementById('theme');
+  themeBtn.addEventListener('click', function(){
+    var dark = document.documentElement.getAttribute('data-theme') !== 'dark';
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    themeBtn.textContent = dark ? 'Light theme' : 'Dark theme';
+  });
+  if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches){ themeBtn.click(); }
+
+  // Form tabs and segmented controls
+  document.querySelectorAll('.tabs button').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.tabs button').forEach(function(x){x.setAttribute('aria-selected', x===b);});
+      document.querySelectorAll('.pane').forEach(function(p){p.classList.toggle('on', p.id===b.dataset.pane);});
+    });
+  });
+  document.querySelectorAll('.seg, .envpick').forEach(function(g){
+    g.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){ if(b.dataset.go) return; g.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed', x===b);}); });
+    });
+  });
+
+  // Sidebar tree
+  var treeHTML =
+    '<div class="grp">▾ Tables <small>12</small></div>' +
+    ['customers','inventory','order_items','orders','payments','products','refunds','sessions','shipments','suppliers','tax_rates','warehouses'].map(function(t){
+      return '<div class="it'+(t==='orders'?' cur':'')+'" data-go="data"><span class="ico"></span>'+t+'</div>';}).join('') +
+    '<div class="grp">▾ Views <small>2</small></div>' +
+    '<div class="it"><span class="ico v"></span>daily_revenue</div><div class="it"><span class="ico v"></span>active_customers</div>' +
+    '<div class="grp">▸ Functions <small>4</small></div>' +
+    '<div class="grp">▸ Sequences <small>9</small></div>' +
+    '<div class="grp">▸ Types <small>3</small></div>';
+  ['tree','tree2','tree3'].forEach(function(id){document.getElementById(id).innerHTML = treeHTML;});
+
+  // Sample data
+  var statuses = ['paid','shipped','pending','paid','refunded','shipped','paid'];
+  var rows = [];
+  for (var i=0;i<60;i++){
+    var id = 1248920 - i;
+    var day = 8 - Math.floor(i/9);
+    var hh = String(23 - (i*7)%24).padStart(2,'0'), mm = String((i*13)%60).padStart(2,'0');
+    var st = statuses[i%statuses.length];
+    rows.push({
+      id:id, customer_id: 40000 + ((i*7919)%9000), status:st,
+      total: ((i*3719)%90000/10 + 149).toFixed(2), currency: i%5===0?'USD':'INR',
+      created_at:'2026-10-0'+Math.max(day,1)+' '+hh+':'+mm+':12+05:30',
+      shipped_at: st==='shipped' ? '2026-10-0'+Math.max(day,1)+' 18:40:00+05:30' : null
+    });
+  }
+  var cols = [['id','bigint'],['customer_id','bigint'],['status','order_status'],['total','numeric(12,2)'],['currency','char(3)'],['created_at','timestamptz'],['shipped_at','timestamptz']];
+  var mods = {}; mods[rows[2].id+':status']='shipped'; mods[rows[5].id+':total']='4999.00';
+  var deleted = {}; deleted[rows[7].id] = true;
+  var selected = rows[0].id;
+  var insPending = true;
+
+  function cell(r,c){
+    var k = r.id+':'+c, v = (k in mods) ? mods[k] : r[c];
+    var cls = [];
+    if (k in mods) cls.push('mod');
+    if (v === null) return '<td class="null">NULL</td>';
+    if (c==='id'||c==='customer_id'||c==='total') cls.push('num');
+    var inner = c==='status' ? '<span class="pill '+v+'">'+v+'</span>' : v;
+    return '<td class="'+cls.join(' ')+'" data-k="'+k+'">'+inner+'</td>';
+  }
+  function renderGrid(){
+    var h = '<thead><tr><th class="rn"></th>' + cols.map(function(c){return '<th>'+c[0]+'<small>'+c[1]+'</small></th>';}).join('') + '</tr></thead><tbody>';
+    if (insPending) h += '<tr class="ins"><td class="rn">+</td><td class="num null">DEFAULT</td><td class="num">40112</td><td><span class="pill pending">pending</span></td><td class="num">1250.00</td><td>INR</td><td class="null">DEFAULT</td><td class="null">NULL</td></tr>';
+    rows.forEach(function(r,i){
+      var cls = (r.id===selected?'sel ':'') + (deleted[r.id]?'del':'');
+      h += '<tr class="'+cls+'" data-id="'+r.id+'"><td class="rn">'+(i+1)+'</td>' + cols.map(function(c){return cell(r,c[0]);}).join('') + '</tr>';
+    });
+    document.getElementById('grid').innerHTML = h + '</tbody>';
+  }
+  function renderDetail(){
+    var r = rows.find(function(x){return x.id===selected;});
+    var h = '<h4>Row '+r.id+'</h4><div class="sub">orders, selected row</div>';
+    cols.forEach(function(c){
+      var k=r.id+':'+c[0], v=(k in mods)?mods[k]:r[c[0]];
+      h += '<div class="fld"><label>'+c[0]+'<em>'+c[1]+'</em></label><input class="input" value="'+(v===null?'':v)+'" placeholder="NULL"'+(c[0]==='id'?' readonly':'')+'>' +
+           (c[0]==='customer_id' ? '<a class="fk" href="#">Open customer '+v+'</a>' : '') + '</div>';
+    });
+    document.getElementById('detail').innerHTML = h;
+  }
+  renderGrid(); renderDetail();
+
+  var grid = document.getElementById('grid');
+  grid.addEventListener('click', function(e){
+    var tr = e.target.closest('tr[data-id]'); if(!tr) return;
+    selected = Number(tr.dataset.id); renderGrid(); renderDetail();
+  });
+  grid.addEventListener('dblclick', function(e){
+    var td = e.target.closest('td[data-k]'); if(!td) return;
+    var k = td.dataset.k, col = k.split(':')[1]; if (col==='id') return;
+    var cur = td.textContent;
+    var v = prompt('Edit '+col, cur);
+    if (v===null || v===cur) return;
+    if (!(k in mods)) staged++;
+    mods[k] = v; renderGrid(); renderDetail(); updateStaged();
+  });
+  document.getElementById('delRow').addEventListener('click', function(){
+    if(!deleted[selected]){ deleted[selected]=true; staged++; renderGrid(); updateStaged(); }
+  });
+  function updateStaged(){
+    document.getElementById('stagedN').textContent = '('+staged+')';
+    status.innerHTML = dataStatus();
+  }
+
+  // Query result grid
+  var g2 = '<thead><tr><th class="rn"></th><th>id<small>bigint</small></th><th>email<small>text</small></th><th>orders<small>bigint</small></th><th>revenue<small>numeric</small></th></tr></thead><tbody>';
+  var names = ['asha.k','rohan.m','meera.s','dev.p','tara.j','arjun.r','neha.v','kabir.d','isha.n','vikram.t','priya.g','sahil.b','ananya.c','nikhil.o','zoya.f'];
+  for (var j=0;j<40;j++){
+    g2 += '<tr><td class="rn">'+(j+1)+'</td><td class="num">'+(40000+(j*7919)%9000)+'</td><td>'+names[j%names.length]+(j>14?j:'')+'@example.com</td><td class="num">'+(42-j)+'</td><td class="num">'+(184250.5 - j*3911.25).toFixed(2)+'</td></tr>';
+  }
+  document.getElementById('grid2').innerHTML = g2 + '</tbody>';
+
+  // Palette
+  var pal = document.getElementById('pal');
+  function togglePal(on){ pal.classList.toggle('on', on); if(on) pal.querySelector('input').focus(); }
+  document.getElementById('openPal').addEventListener('click', function(){ togglePal(true); });
+  pal.addEventListener('click', function(e){ if(e.target===pal) togglePal(false); if(e.target.closest('li.cur')){ togglePal(false); go('data'); } });
+
+  // Review SQL
+  var rev = document.getElementById('rev');
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  function lit(v){return isNaN(v) ? '<span class="s">\''+esc(v)+'\'</span>' : '<span class="n">'+esc(v)+'</span>';}
+  document.getElementById('reviewBtn').addEventListener('click', function(){
+    var out = '<span class="k">BEGIN</span>;\n' + (insPending ? '\n<span class="k">INSERT INTO</span> public.orders (customer_id, status, total, currency)\n<span class="k">VALUES</span> (<span class="n">40112</span>, <span class="s">\'pending\'</span>, <span class="n">1250.00</span>, <span class="s">\'INR\'</span>);\n' : '');
+    Object.keys(mods).forEach(function(k){
+      var p = k.split(':');
+      out += '\n<span class="k">UPDATE</span> public.orders <span class="k">SET</span> '+p[1]+' = '+lit(mods[k])+' <span class="k">WHERE</span> id = <span class="n">'+p[0]+'</span>;';
+    });
+    Object.keys(deleted).forEach(function(id){
+      out += '\n<span class="k">DELETE FROM</span> public.orders <span class="k">WHERE</span> id = <span class="n">'+id+'</span>;';
+    });
+    document.getElementById('revSql').innerHTML = out + '\n\n<span class="k">COMMIT</span>;';
+    rev.querySelector('h3').textContent = 'Review '+staged+' changes to orders';
+    rev.classList.add('on');
+  });
+  document.getElementById('revCancel').addEventListener('click', function(){ rev.classList.remove('on'); });
+  document.getElementById('revCommit').addEventListener('click', function(){
+    rows.forEach(function(r){ cols.forEach(function(c){ var k=r.id+':'+c[0]; if(k in mods) r[c[0]] = mods[k]; }); });
+    rows = rows.filter(function(r){ return !deleted[r.id]; });
+    mods = {}; deleted = {}; staged = 0; insPending = false;
+    if(!rows.some(function(r){return r.id===selected;})) selected = rows[0].id;
+    renderGrid(); renderDetail(); updateStaged();
+    rev.classList.remove('on');
+  });
+  rev.addEventListener('click', function(e){ if(e.target===rev) rev.classList.remove('on'); });
+
+  document.addEventListener('keydown', function(e){
+    if ((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); togglePal(!pal.classList.contains('on')); }
+    if (e.key==='Escape'){ togglePal(false); rev.classList.remove('on'); }
+  });
+
+  go('home');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+name: Budgets
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: budgets-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: budgets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.88.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: budgets
+          save-if: true
+
+      - name: Run budget gate
+        run: cargo xtask budgets gate --build --output budgets-result.json
+
+      - name: Fetch gh-pages baseline
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: _gh-pages
+
+      - name: PR comment
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          baseline=""
+          if [ -f _gh-pages/benchmarks/latest.json ]; then
+            baseline="--baseline _gh-pages/benchmarks/latest.json"
+          fi
+          body="$(cargo xtask budgets comment --current budgets-result.json $baseline)"
+          gh pr comment "${{ github.event.pull_request.number }}" --body "$body"
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: budgets-result
+          path: budgets-result.json
+
+      - name: Prepare gh-pages trend data
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p gh-pages-out/benchmarks
+          if [ -f _gh-pages/benchmarks/history.csv ]; then
+            cp _gh-pages/benchmarks/history.csv gh-pages-out/benchmarks/history.csv
+          fi
+          cp budgets-result.json gh-pages-out/benchmarks/latest.json
+          cargo xtask budgets record --input budgets-result.json --csv gh-pages-out/benchmarks/history.csv
+
+      - name: Deploy gh-pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: gh-pages-out
+          branch: gh-pages
+          single-commit: true

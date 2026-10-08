@@ -1,0 +1,31 @@
+# Used when connection RAM scenarios are implemented (LUM-004+).
+# CI will start these services before `connections_10` / schema scenarios run.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wisp
+      POSTGRES_PASSWORD: wisp
+      POSTGRES_DB: wisp_bench
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wisp -d wisp_bench"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: wisp
+      MYSQL_DATABASE: wisp_bench
+      MYSQL_USER: wisp
+      MYSQL_PASSWORD: wisp
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-pwisp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

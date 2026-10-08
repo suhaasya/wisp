@@ -36,7 +36,8 @@ Release/dist profiles and size budgets: [docs/budgets.md](docs/budgets.md). Meas
 
 - **LUM-001** — workspace skeleton
 - **LUM-002** — release/dist profiles and size baseline
-- **LUM-003** — CI pipeline (current)
+- **LUM-003** — CI pipeline (lint)
+- **LUM-004** — budget gates in CI (current)
 - **LUM-005** — GPUI hello window
 
 ## License
