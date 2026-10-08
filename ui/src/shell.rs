@@ -13,8 +13,9 @@ use crate::components::gallery::ComponentGallery;
 
 
 use crate::{
+    components::toast,
     environment::Environment,
-    launch::{AppearanceConfig, ShellMetrics, WindowPersistence},
+    launch::{AppearanceConfig, SharedSettingsInbox, ShellMetrics, WindowPersistence},
     memory,
     route::Route,
     theme::{self, ResolvedTheme},
@@ -30,6 +31,8 @@ pub struct WispShell {
     persistence: Rc<RefCell<WindowPersistence>>,
     metrics: Rc<RefCell<ShellMetrics>>,
     appearance: Rc<RefCell<AppearanceConfig>>,
+    settings_inbox: Option<SharedSettingsInbox>,
+    settings_toast: Option<SharedString>,
     #[cfg(feature = "ui-gallery")]
     gallery: Entity<ComponentGallery>,
 }
@@ -39,6 +42,7 @@ impl WispShell {
         persistence: Rc<RefCell<WindowPersistence>>,
         metrics: Rc<RefCell<ShellMetrics>>,
         appearance: Rc<RefCell<AppearanceConfig>>,
+        settings_inbox: Option<SharedSettingsInbox>,
         #[cfg(feature = "ui-gallery")] gallery: Entity<ComponentGallery>,
     ) -> Self {
         Self {
@@ -51,8 +55,42 @@ impl WispShell {
             persistence,
             metrics,
             appearance,
+            settings_inbox,
+            settings_toast: None,
             #[cfg(feature = "ui-gallery")]
             gallery,
+        }
+    }
+
+    fn drain_settings_inbox(&mut self, cx: &mut Context<Self>) {
+        let Some(inbox) = self.settings_inbox.as_ref() else {
+            return;
+        };
+        let Ok(mut guard) = inbox.lock() else {
+            return;
+        };
+        for toast in guard.toasts.drain(..) {
+            let message = if let Some(line) = toast.line {
+                format!("settings.toml line {line}: {}", toast.message)
+            } else {
+                toast.message
+            };
+            self.settings_toast = Some(message.into());
+        }
+        if let Some(config) = guard.appearance.take() {
+            *self.appearance.borrow_mut() = config.clone();
+            theme::update_global(cx, |global, cx| {
+                global.apply_appearance(
+                    config.theme_mode,
+                    config.density,
+                    theme::Typography {
+                        ui_font: config.ui_font,
+                        mono_font: config.mono_font,
+                    },
+                    cx,
+                );
+            });
+            cx.notify();
         }
     }
 
@@ -72,6 +110,7 @@ impl WispShell {
 impl Render for WispShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.report_first_frame();
+        self.drain_settings_inbox(cx);
         capture_window_state(window, &self.persistence);
 
         let theme = theme::read_global(cx).resolved().clone();
@@ -115,6 +154,9 @@ impl Render for WispShell {
             .child(status_bar(
                 &theme, status_h, env_color, connection, timing, memory_mb, memory_pct,
             ))
+            .children(self.settings_toast.as_ref().map(|message| {
+                toast::toast(&theme, message.clone())
+            }))
     }
 }
 

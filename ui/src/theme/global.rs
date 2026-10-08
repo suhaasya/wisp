@@ -63,6 +63,20 @@ impl ThemeGlobal {
         cx.borrow_mut().refresh_windows();
     }
 
+    pub fn apply_appearance<C: gpui::BorrowAppContext + BorrowMut<App>>(
+        &mut self,
+        mode: ThemeMode,
+        density: Density,
+        typography: Typography,
+        cx: &mut C,
+    ) {
+        self.mode = mode;
+        self.density = density;
+        self.typography = typography;
+        self.recompute();
+        cx.borrow_mut().refresh_windows();
+    }
+
     pub fn effective_appearance(&self) -> SystemAppearance {
         match self.mode {
             ThemeMode::Light => SystemAppearance::Light,

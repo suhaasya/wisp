@@ -1,5 +1,7 @@
 //! Window launch/persistence DTOs (mapped from `wisp-store` in the binary crate).
 
+use std::sync::{Arc, Mutex};
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WindowGeometry {
     pub width: f32,
@@ -22,10 +24,25 @@ pub struct AppearanceConfig {
     pub mono_font: crate::theme::MonoFontChoice,
 }
 
+#[derive(Debug, Clone)]
+pub struct SettingsToast {
+    pub line: Option<usize>,
+    pub message: String,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct SettingsInbox {
+    pub toasts: Vec<SettingsToast>,
+    pub appearance: Option<AppearanceConfig>,
+}
+
+pub type SharedSettingsInbox = Arc<Mutex<SettingsInbox>>;
+
 #[derive(Debug, Clone, Default)]
 pub struct LaunchConfig {
     pub window: WindowPersistence,
     pub appearance: AppearanceConfig,
+    pub settings_inbox: Option<SharedSettingsInbox>,
 }
 
 #[derive(Debug, Clone, Default)]

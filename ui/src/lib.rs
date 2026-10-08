@@ -21,7 +21,8 @@ pub mod render;
 
 pub use environment::Environment;
 pub use launch::{
-    AppearanceConfig, LaunchConfig, LaunchOutcome, ShellMetrics, WindowGeometry, WindowPersistence,
+    AppearanceConfig, LaunchConfig, LaunchOutcome, SettingsInbox, SettingsToast, SharedSettingsInbox,
+    ShellMetrics, WindowGeometry, WindowPersistence,
 };
 pub use route::Route;
 pub use theme::{Density, MonoFontChoice, ThemeMode, UiFontChoice};

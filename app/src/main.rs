@@ -2,14 +2,20 @@
 
 mod bench;
 
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
+
 use clap::Parser;
-use wisp_store::settings::{
+use wisp_store::{
+    settings::{spawn_settings_watcher, SettingsStore, SettingsWatchEvent},
+    window::WindowState,
     AppearanceSettings, DensitySetting, MonoFontSetting, Settings, ThemeModeSetting, UiFontSetting,
 };
-use wisp_store::window::WindowState;
 use wisp_ui::{
-    AppearanceConfig, Density, LaunchConfig, MonoFontChoice, ThemeMode, UiFontChoice,
-    WindowGeometry, WindowPersistence,
+    AppearanceConfig, Density, LaunchConfig, MonoFontChoice, SettingsInbox, SettingsToast,
+    ThemeMode, UiFontChoice, WindowGeometry, WindowPersistence,
 };
 
 #[derive(Parser)]
@@ -31,8 +37,16 @@ fn main() -> anyhow::Result<()> {
         let _ = &*bench_stress::STRESS;
     }
 
-    let mut settings = Settings::load();
+    let store = Arc::new(Mutex::new(SettingsStore::load()));
     let stored = WindowState::load();
+    let settings_inbox = Arc::new(Mutex::new(SettingsInbox::default()));
+    start_settings_watcher(Arc::clone(&store), settings_inbox.clone());
+
+    let appearance = {
+        let guard = store.lock().expect("settings store lock");
+        appearance_from_settings(guard.get().appearance.clone())
+    };
+
     let config = LaunchConfig {
         window: WindowPersistence {
             maximized: stored.maximized,
@@ -43,13 +57,18 @@ fn main() -> anyhow::Result<()> {
                 y: g.y,
             }),
         },
-        appearance: appearance_from_settings(&settings.appearance),
+        appearance,
+        settings_inbox: Some(settings_inbox.clone()),
     };
 
     let outcome = wisp_ui::run(config)?;
 
-    settings.appearance = appearance_to_settings(&outcome.appearance);
-    settings.save()?;
+    {
+        let mut guard = store.lock().expect("settings store lock");
+        let merged = merge_appearance(guard.get().clone(), &outcome.appearance);
+        guard.set(merged);
+        guard.save()?;
+    }
 
     let saved = WindowState {
         maximized: outcome.window.maximized,
@@ -68,7 +87,34 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn appearance_from_settings(value: &AppearanceSettings) -> AppearanceConfig {
+fn start_settings_watcher(store: Arc<Mutex<SettingsStore>>, inbox: Arc<Mutex<SettingsInbox>>) {
+    let (rx, _handle) = spawn_settings_watcher(store);
+    thread::spawn(move || {
+        while let Ok(event) = rx.recv() {
+            let Ok(mut guard) = inbox.lock() else {
+                continue;
+            };
+            match event {
+                SettingsWatchEvent::Reloaded(settings) => {
+                    guard.appearance = Some(appearance_from_settings(settings.appearance));
+                }
+                SettingsWatchEvent::ParseError(err) => {
+                    guard.toasts.push(SettingsToast {
+                        line: err.line(),
+                        message: err.to_string(),
+                    });
+                }
+            }
+        }
+    });
+}
+
+fn merge_appearance(mut settings: Settings, appearance: &AppearanceConfig) -> Settings {
+    settings.appearance = appearance_to_settings(appearance);
+    settings
+}
+
+fn appearance_from_settings(value: AppearanceSettings) -> AppearanceConfig {
     AppearanceConfig {
         theme_mode: match value.theme_mode {
             ThemeModeSetting::Light => ThemeMode::Light,

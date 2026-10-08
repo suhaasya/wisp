@@ -45,13 +45,7 @@ impl WindowState {
 }
 
 pub fn window_state_path() -> PathBuf {
-    config_dir().join(FILE_NAME)
-}
-
-fn config_dir() -> PathBuf {
-    if let Some(dirs) = directories::ProjectDirs::from("", "", "wisp") {
-        dirs.config_dir().to_path_buf()
-    } else {
-        PathBuf::from(".wisp")
-    }
+    crate::paths::WispPaths::resolve()
+        .config_dir()
+        .join(FILE_NAME)
 }

@@ -18,11 +18,13 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
     let persistence = Rc::new(RefCell::new(config.window));
     let metrics = Rc::new(RefCell::new(ShellMetrics::default()));
     let appearance = Rc::new(RefCell::new(config.appearance));
+    let settings_inbox = config.settings_inbox.clone();
 
     application().run({
         let persistence = persistence.clone();
         let metrics = metrics.clone();
         let appearance = appearance.clone();
+        let settings_inbox = settings_inbox.clone();
         move |cx: &mut App| {
             let prefs = appearance.borrow();
             theme::init_global(
@@ -51,6 +53,7 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                     let persistence = persistence.clone();
                     let metrics = metrics.clone();
                     let appearance = appearance.clone();
+                    let settings_inbox = settings_inbox.clone();
                     move |_, cx| {
                         #[allow(unused_variables)]
                         cx.new(|cx| {
@@ -62,6 +65,7 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                                     persistence.clone(),
                                     metrics.clone(),
                                     appearance.clone(),
+                                    settings_inbox.clone(),
                                     gallery,
                                 )
                             }
@@ -71,6 +75,7 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                                     persistence.clone(),
                                     metrics.clone(),
                                     appearance.clone(),
+                                    settings_inbox.clone(),
                                 )
                             }
                         })

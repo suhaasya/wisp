@@ -1,8 +1,8 @@
-use gpui::{div, IntoElement, ParentElement, Styled};
+use gpui::{div, IntoElement, ParentElement, SharedString, Styled};
 
 use crate::theme::ResolvedTheme;
 
-pub fn toast(theme: &ResolvedTheme, message: &'static str) -> impl IntoElement {
+pub fn toast(theme: &ResolvedTheme, message: impl Into<SharedString>) -> impl IntoElement {
     let c = &theme.colors;
     div()
         .absolute()
@@ -17,5 +17,5 @@ pub fn toast(theme: &ResolvedTheme, message: &'static str) -> impl IntoElement {
         .shadow_md()
         .text_sm()
         .text_color(c.ink1)
-        .child(message)
+        .child(message.into())
 }

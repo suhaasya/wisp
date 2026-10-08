@@ -1,0 +1,5 @@
+# Legacy v0 sample (no version key, flat appearance).
+theme_mode = "dark"
+density = "compact"
+ui_font = "system"
+mono_font = "system"
