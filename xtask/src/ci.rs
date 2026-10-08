@@ -1,5 +1,6 @@
 use std::{
     io::{self, Write},
+    path::Path,
     process::{Command, Stdio},
 };
 
@@ -134,12 +135,12 @@ fn run_artifact_path(args: BuildReleaseArgs) -> Result<()> {
 }
 
 fn run_deny() -> Result<()> {
-    ensure_cargo_subcommand("deny")?;
+    ensure_cargo_plugin("deny")?;
     let root = workspace_root()?;
-    let status = cargo_command(&root)
-        .args(["deny", "check"])
+    let status = cargo_plugin_command(&root, "deny")?
+        .args(["check"])
         .status()
-        .context("failed to run cargo deny")?;
+        .context("failed to run cargo-deny")?;
     if !status.success() {
         bail!("cargo deny check failed");
     }
@@ -147,12 +148,11 @@ fn run_deny() -> Result<()> {
 }
 
 fn run_audit() -> Result<()> {
-    ensure_cargo_subcommand("audit")?;
+    ensure_cargo_plugin("audit")?;
     let root = workspace_root()?;
-    let status = cargo_command(&root)
-        .args(["audit"])
+    let status = cargo_plugin_command(&root, "audit")?
         .status()
-        .context("failed to run cargo audit")?;
+        .context("failed to run cargo-audit")?;
     if !status.success() {
         bail!("cargo audit failed");
     }
@@ -172,12 +172,12 @@ fn run_smoke() -> Result<()> {
         bail!("cargo build failed");
     }
     run_test(TestArgs { target: None })?;
-    if cargo_subcommand_available("deny") {
+    if cargo_plugin_available("deny") {
         run_deny()?;
     } else {
         eprintln!("note: skipping cargo deny (not installed)");
     }
-    if cargo_subcommand_available("audit") {
+    if cargo_plugin_available("audit") {
         run_audit()?;
     } else {
         eprintln!("note: skipping cargo audit (not installed)");
@@ -185,22 +185,26 @@ fn run_smoke() -> Result<()> {
     Ok(())
 }
 
-fn ensure_cargo_subcommand(subcommand: &str) -> Result<()> {
-    if cargo_subcommand_available(subcommand) {
+fn ensure_cargo_plugin(plugin: &str) -> Result<()> {
+    if cargo_plugin_available(plugin) {
         Ok(())
     } else {
-        bail!(
-            "`cargo {subcommand}` not available (install via `cargo install cargo-{subcommand}`)"
-        );
+        bail!("`cargo-{plugin}` not found in PATH (install via `cargo install cargo-{plugin}`)");
     }
 }
 
-fn cargo_subcommand_available(subcommand: &str) -> bool {
-    Command::new("cargo")
-        .args([subcommand, "--version"])
+fn cargo_plugin_available(plugin: &str) -> bool {
+    Command::new(format!("cargo-{plugin}"))
+        .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+fn cargo_plugin_command(workspace_root: &Path, plugin: &str) -> Result<Command> {
+    let mut cmd = Command::new(format!("cargo-{plugin}"));
+    cmd.current_dir(workspace_root);
+    Ok(cmd)
 }

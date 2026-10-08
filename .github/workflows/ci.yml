@@ -35,6 +35,11 @@ jobs:
         with:
           tool: cargo-deny@0.18.3,cargo-audit@0.22.1
 
+      - name: Verify supply-chain tools on PATH
+        run: |
+          cargo-deny --version
+          cargo-audit --version
+
       - name: fmt
         run: cargo xtask ci fmt
 

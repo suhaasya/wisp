@@ -3,5 +3,4 @@
 # and run the same commands as `scripts/ci-smoke.sh`.
 
 [alias]
-deny = "deny --all-features check"
 xtask = "run --package xtask --"
