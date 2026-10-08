@@ -19,7 +19,7 @@ Dependency flow: `app → ui → core → drivers → transport`, with `store` u
 
 ## Getting started
 
-Requires the pinned toolchain in `rust-toolchain.toml` (Rust 1.88 + rustfmt + clippy).
+Requires the pinned toolchain in `rust-toolchain.toml` (Rust 1.99 + rustfmt + clippy; GPUI/Zed).
 
 ```bash
 cargo build --workspace
@@ -37,8 +37,8 @@ Release/dist profiles and size budgets: [docs/budgets.md](docs/budgets.md). Meas
 - **LUM-001** — workspace skeleton
 - **LUM-002** — release/dist profiles and size baseline
 - **LUM-003** — CI pipeline (lint)
-- **LUM-004** — budget gates in CI (current)
-- **LUM-005** — GPUI hello window
+- **LUM-004** — budget gates in CI
+- **LUM-005** — GPUI application shell (current)
 
 ## License
 

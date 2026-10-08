@@ -18,6 +18,7 @@ path = "src/main.rs"
 bench-stress = []
 
 [dependencies]
+anyhow.workspace = true
 clap.workspace = true
 wisp-store = { path = "../store", version = "0.1.0", default-features = false }
 wisp-ui = { path = "../ui", version = "0.1.0", default-features = false }

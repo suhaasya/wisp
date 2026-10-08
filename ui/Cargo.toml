@@ -11,4 +11,8 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+anyhow.workspace = true
+gpui.workspace = true
+gpui_platform.workspace = true
+sysinfo = "0.33"
 wisp-core = { path = "../core", version = "0.1.0" }

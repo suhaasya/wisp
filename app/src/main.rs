@@ -1,10 +1,10 @@
 //! Wisp application entry point.
-//!
-//! GPUI window bootstrap arrives in LUM-005; this binary only proves the workspace links.
 
 mod bench;
 
 use clap::Parser;
+use wisp_store::window::WindowState;
+use wisp_ui::{LaunchConfig, WindowGeometry, WindowPersistence};
 
 #[derive(Parser)]
 #[command(name = "wisp", version, about = "Wisp database client")]
@@ -14,7 +14,7 @@ struct Args {
     bench_scenario: Option<String>,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     if let Some(scenario) = args.bench_scenario {
         bench::run(&scenario);
@@ -22,16 +22,38 @@ fn main() {
 
     #[cfg(feature = "bench-stress")]
     {
-        // Forces the size gate to fail when built with `--features bench-stress`.
         let _ = &*bench_stress::STRESS;
     }
 
-    println!(
-        "wisp {} (ui={}, store={}) — hello window placeholder",
-        env!("CARGO_PKG_VERSION"),
-        wisp_ui::CRATE_MARKER,
-        wisp_store::CRATE_MARKER,
-    );
+    let stored = WindowState::load();
+    let config = LaunchConfig {
+        window: WindowPersistence {
+            maximized: stored.maximized,
+            geometry: stored.geometry.map(|g| WindowGeometry {
+                width: g.width,
+                height: g.height,
+                x: g.x,
+                y: g.y,
+            }),
+        },
+    };
+
+    let outcome = wisp_ui::run(config)?;
+    let saved = WindowState {
+        maximized: outcome.window.maximized,
+        geometry: outcome
+            .window
+            .geometry
+            .map(|g| wisp_store::window::WindowGeometry {
+                width: g.width,
+                height: g.height,
+                x: g.x,
+                y: g.y,
+            }),
+    };
+    saved.save()?;
+
+    Ok(())
 }
 
 #[cfg(feature = "bench-stress")]
