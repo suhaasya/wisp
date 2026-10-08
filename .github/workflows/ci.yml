@@ -96,6 +96,87 @@ jobs:
           WISP_KEYRING_IT: ${{ matrix.keyring_it }}
         run: ${{ matrix.run }}
 
+  postgres:
+    name: postgres driver (LUM-012)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wisp
+          POSTGRES_PASSWORD: wisp
+          POSTGRES_DB: wisp_bench
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wisp -d wisp_bench"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: postgres
+          save-if: true
+
+      - name: integration tests
+        env:
+          WISP_PG_IT: "1"
+          PGHOST: localhost
+          PGUSER: wisp
+          PGPASSWORD: wisp
+          PGDATABASE: wisp_bench
+          PGPORT: "5432"
+        run: cargo test -p wisp-drivers --test postgres_integration
+
+  mysql:
+    name: mysql driver (LUM-013)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: wisp
+          MYSQL_DATABASE: wisp_bench
+          MYSQL_USER: wisp
+          MYSQL_PASSWORD: wisp
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pwisp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: mysql
+          save-if: true
+
+      - name: integration tests
+        env:
+          WISP_MYSQL_IT: "1"
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_USER: wisp
+          MYSQL_PASSWORD: wisp
+          MYSQL_DATABASE: wisp_bench
+          MYSQL_PORT: "3306"
+        run: cargo test -p wisp-drivers --test mysql_integration
+
   # Build matrix disabled temporarily — re-enable when ready for 5-target release CI (LUM-003).
   #
   # build:

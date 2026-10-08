@@ -47,6 +47,10 @@ impl WispPaths {
     pub fn settings_toml(&self) -> PathBuf {
         self.config_dir.join("settings.toml")
     }
+
+    pub fn connections_toml(&self) -> PathBuf {
+        self.config_dir.join("connections.toml")
+    }
 }
 
 impl Default for WispPaths {

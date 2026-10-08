@@ -8,6 +8,7 @@
 
 mod app;
 pub mod bridge;
+pub mod connections;
 mod environment;
 mod launch;
 mod memory;

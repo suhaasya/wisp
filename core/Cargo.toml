@@ -17,3 +17,6 @@ tokio.workspace = true
 tokio-util.workspace = true
 wisp-drivers = { path = "../drivers", version = "0.1.0" }
 wisp-store = { path = "../store", version = "0.1.0" }
+
+[dev-dependencies]
+tempfile = "3.14"

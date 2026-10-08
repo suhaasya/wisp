@@ -5,11 +5,17 @@ use std::io::{self, IsTerminal};
 use anyhow::{bail, Context};
 use wisp_store::{
     secrets::FileVaultStore, BlockingSecretStore, OpenSecretStoreOptions, Secret, SecretError,
-    WispPaths,
+    SharedSecretStore, WispPaths,
 };
 
 /// Open the OS keychain when available; otherwise prompt for a vault master password.
+#[allow(dead_code)]
 pub fn open_blocking_secret_store(paths: &WispPaths) -> anyhow::Result<BlockingSecretStore> {
+    Ok(BlockingSecretStore::new(open_shared_secret_store(paths)?))
+}
+
+/// Shared secret backend used by connection persistence and blocking wrappers.
+pub fn open_shared_secret_store(paths: &WispPaths) -> anyhow::Result<SharedSecretStore> {
     let vault_path = FileVaultStore::vault_path(paths);
     let mut master: Option<Secret> = None;
 
@@ -18,7 +24,7 @@ pub fn open_blocking_secret_store(paths: &WispPaths) -> anyhow::Result<BlockingS
             paths,
             master_password: master.as_ref(),
         }) {
-            Ok((store, _kind)) => return Ok(BlockingSecretStore::new(store)),
+            Ok((store, _kind)) => return Ok(store),
             Err(SecretError::MasterPasswordRequired) => {
                 master = Some(prompt_master_password(vault_path.is_file())?);
             }

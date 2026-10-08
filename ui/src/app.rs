@@ -20,6 +20,7 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
     let appearance = Rc::new(RefCell::new(config.appearance));
     let settings_inbox = config.settings_inbox.clone();
     let db_bridge = config.db_bridge.clone();
+    let connections = config.connections.clone();
 
     application().run({
         let persistence = persistence.clone();
@@ -27,6 +28,7 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
         let appearance = appearance.clone();
         let settings_inbox = settings_inbox.clone();
         let db_bridge = db_bridge.clone();
+        let connections = connections.clone();
         move |cx: &mut App| {
             if let Some(bridge) = db_bridge.clone() {
                 crate::bridge::init_db_bridge(cx, bridge);
@@ -42,6 +44,7 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
             );
             drop(prefs);
             bind_text_input_keys(cx);
+            crate::connections::bind_connection_keys(cx);
 
             let bounds = window_bounds_from_persistence(&persistence.borrow(), cx);
 
@@ -60,6 +63,7 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                     let metrics = metrics.clone();
                     let appearance = appearance.clone();
                     let settings_inbox = settings_inbox.clone();
+                    let connections = connections.clone();
                     move |_, cx| {
                         #[allow(unused_variables)]
                         cx.new(|cx| {
@@ -72,7 +76,9 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                                     metrics.clone(),
                                     appearance.clone(),
                                     settings_inbox.clone(),
+                                    connections.clone(),
                                     gallery,
+                                    cx,
                                 )
                             }
                             #[cfg(not(feature = "ui-gallery"))]
@@ -82,6 +88,8 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                                     metrics.clone(),
                                     appearance.clone(),
                                     settings_inbox.clone(),
+                                    connections.clone(),
+                                    cx,
                                 )
                             }
                         })

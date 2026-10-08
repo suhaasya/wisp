@@ -5,14 +5,27 @@
 //! binary crate.
 
 pub mod bridge;
+pub mod connections;
 pub mod error;
 pub mod grid;
 pub mod render;
 
+pub use connections::{
+    card_from_profile, ConnectionBadge, ConnectionCardView, ConnectionEngine,
+    ConnectionEngineKind, ConnectionFolder, ConnectionGroup, ConnectionHub,
+    ConnectionHubError, ConnectionId, ConnectionManagerController, ConnectionProfile,
+    ConnectionsView, EnvFilter, EnvironmentTag, ManagerAction, RailSelection, TransportKind,
+};
 pub use error::{WispError, WispErrorKind};
 pub use bridge::{
     assert_no_block_on_ui, enter_runtime_thread, enter_ui_thread, DbBridge, DbCommandPayload,
     DbEvent, DbEventPayload, DbRuntimeConfig, RequestId,
+};
+pub use wisp_drivers::{
+    ColumnMeta, DbDriver, Dialect, DriverError, EngineKind, ExecuteStats, MockDriver,
+    MysqlConfig, MysqlDialect, MysqlDriver, Page, PageArena, PageBuilder, PageRequest,
+    PostgresConfig, PostgresDialect, PostgresDriver, QueryId, ServerInfo, Value,
+    BYTES_PREVIEW_MAX,
 };
 
 /// Placeholder until core session logic lands in later milestones.

@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use wisp_core::DbBridge;
+use wisp_core::{ConnectionHub, DbBridge};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WindowGeometry {
@@ -40,13 +40,15 @@ pub struct SettingsInbox {
 
 pub type SharedSettingsInbox = Arc<Mutex<SettingsInbox>>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct LaunchConfig {
     pub window: WindowPersistence,
     pub appearance: AppearanceConfig,
     pub settings_inbox: Option<SharedSettingsInbox>,
     /// Tokio bridge for DB/network work (LUM-010).
     pub db_bridge: Option<Arc<DbBridge>>,
+    /// Saved connection profiles (LUM-014 / LUM-015).
+    pub connections: Option<Arc<ConnectionHub>>,
 }
 
 #[derive(Debug, Clone, Default)]

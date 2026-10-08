@@ -11,4 +11,20 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+bytes.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+futures.workspace = true
+postgres-types = { version = "0.2", default-features = false, features = [
+    "with-uuid-1",
+    "with-chrono-0_4",
+] }
+thiserror.workspace = true
+tokio.workspace = true
+tokio-postgres.workspace = true
+uuid.workspace = true
+mysql_async.workspace = true
 wisp-transport = { path = "../transport", version = "0.1.0" }
+
+[dev-dependencies]
+dhat = "0.3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

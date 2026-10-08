@@ -51,7 +51,12 @@ Release/dist profiles and size budgets: [docs/budgets.md](docs/budgets.md). Meas
 - **LUM-007** — internal UI component kit
 - **LUM-008** — settings and config storage
 - **LUM-009** — secret storage (OS keychain)
-- **LUM-010** — async runtime bridge (tokio ↔ GPUI) (current)
+- **LUM-010** — async runtime bridge (tokio ↔ GPUI)
+- **LUM-011** — DbDriver trait and core data types
+- **LUM-012** — PostgreSQL driver (TCP, plain auth)
+- **LUM-013** — MySQL / MariaDB driver (TCP, plain auth)
+- **LUM-014** — connection model and saved connections
+- **LUM-015** — connection manager welcome screen (current)
 
 ## License
 

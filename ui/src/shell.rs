@@ -1,8 +1,13 @@
-use std::{cell::RefCell, rc::Rc, time::Instant};
+use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
 
 use gpui::{
-    div, prelude::*, px, Context, InteractiveElement, IntoElement, ParentElement, Render,
+    div, prelude::*, px, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
     SharedString, StatefulInteractiveElement, Styled, Window, WindowBounds,
+};
+use wisp_core::ConnectionHub;
+
+use crate::connections::{
+    ConnectionManager, ShellCommand, ShellCommandSender,
 };
 
 #[cfg(feature = "ui-gallery")]
@@ -33,6 +38,8 @@ pub struct WispShell {
     appearance: Rc<RefCell<AppearanceConfig>>,
     settings_inbox: Option<SharedSettingsInbox>,
     settings_toast: Option<SharedString>,
+    connection_commands: ShellCommandSender,
+    connection_manager: Option<Entity<ConnectionManager>>,
     #[cfg(feature = "ui-gallery")]
     gallery: Entity<ComponentGallery>,
 }
@@ -43,8 +50,15 @@ impl WispShell {
         metrics: Rc<RefCell<ShellMetrics>>,
         appearance: Rc<RefCell<AppearanceConfig>>,
         settings_inbox: Option<SharedSettingsInbox>,
+        connections: Option<Arc<ConnectionHub>>,
         #[cfg(feature = "ui-gallery")] gallery: Entity<ComponentGallery>,
+        cx: &mut Context<Self>,
     ) -> Self {
+        let connection_commands = ShellCommandSender::default();
+        let connection_manager = connections.map(|hub| {
+            let commands = connection_commands.clone();
+            cx.new(|cx| ConnectionManager::new(cx, hub, commands))
+        });
         Self {
             route: Route::Connections,
             environment: Environment::Local,
@@ -57,9 +71,34 @@ impl WispShell {
             appearance,
             settings_inbox,
             settings_toast: None,
+            connection_commands,
+            connection_manager,
             #[cfg(feature = "ui-gallery")]
             gallery,
         }
+    }
+
+    fn drain_connection_commands(&mut self, cx: &mut Context<Self>) {
+        let commands = self.connection_commands.drain();
+        if commands.is_empty() {
+            return;
+        }
+        for command in commands {
+            match command {
+                ShellCommand::Connect(id) => {
+                    self.connection_status = format!("Connected to {id}").into();
+                    self.timing_status = "Session open".into();
+                    self.route = Route::Workspace;
+                }
+                ShellCommand::Edit(_id) => {
+                    self.route = Route::ConnectionForm;
+                }
+                ShellCommand::NewConnection => {
+                    self.route = Route::ConnectionForm;
+                }
+            }
+        }
+        cx.notify();
     }
 
     fn drain_settings_inbox(&mut self, cx: &mut Context<Self>) {
@@ -111,6 +150,7 @@ impl Render for WispShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.report_first_frame();
         self.drain_settings_inbox(cx);
+        self.drain_connection_commands(cx);
         capture_window_state(window, &self.persistence);
 
         let theme = theme::read_global(cx).resolved().clone();
@@ -166,33 +206,25 @@ fn render_route(shell: &WispShell, route: Route, theme: &ResolvedTheme) -> impl 
     match route {
         #[cfg(feature = "ui-gallery")]
         Route::Gallery => div().size_full().child(shell.gallery.clone()),
-        Route::Connections => div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .bg(c.canvas)
-            .child(
+        Route::Connections => {
+            if let Some(manager) = &shell.connection_manager {
+                div().size_full().child(manager.clone())
+            } else {
                 div()
+                    .size_full()
                     .flex()
                     .flex_col()
-                    .gap_2()
                     .items_center()
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(c.ink1)
-                            .child("No connections yet"),
-                    )
+                    .justify_center()
+                    .bg(c.canvas)
                     .child(
                         div()
                             .text_sm()
                             .text_color(c.ink3)
-                            .child("Saved connections will appear here."),
-                    ),
-            ),
+                            .child("Connection store unavailable."),
+                    )
+            }
+        }
         Route::ConnectionForm => div()
             .size_full()
             .flex()

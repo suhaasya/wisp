@@ -9,12 +9,12 @@ use std::{
 };
 
 use clap::Parser;
-use wisp_core::{DbBridge, DbRuntimeConfig};
+use wisp_core::{ConnectionHub, ConnectionHubError, DbBridge, DbRuntimeConfig};
 use wisp_store::{
     settings::{spawn_settings_watcher, SettingsStore, SettingsWatchEvent},
     window::WindowState,
-    AppearanceSettings, DensitySetting, MonoFontSetting, Settings, ThemeModeSetting,
-    UiFontSetting, WispPaths,
+    AppearanceSettings, ConnectionsLoadError, DensitySetting, MonoFontSetting, Settings,
+    ThemeModeSetting, UiFontSetting, WispPaths,
 };
 use wisp_ui::{
     AppearanceConfig, Density, LaunchConfig, MonoFontChoice, SettingsInbox, SettingsToast,
@@ -40,12 +40,15 @@ fn main() -> anyhow::Result<()> {
         let _ = &*bench_stress::STRESS;
     }
 
-    let _secret_store = secrets::open_blocking_secret_store(&WispPaths::resolve())?;
+    let paths = WispPaths::resolve();
+    let secrets = secrets::open_shared_secret_store(&paths)?;
+    let _secret_store = wisp_store::BlockingSecretStore::new(secrets.clone());
     let db_bridge = Arc::new(DbBridge::start(DbRuntimeConfig::default()));
 
     let store = Arc::new(Mutex::new(SettingsStore::load()));
     let stored = WindowState::load();
     let settings_inbox = Arc::new(Mutex::new(SettingsInbox::default()));
+    let connections = load_connection_hub(&paths, secrets, &settings_inbox);
     start_settings_watcher(Arc::clone(&store), settings_inbox.clone());
 
     let appearance = {
@@ -66,6 +69,7 @@ fn main() -> anyhow::Result<()> {
         appearance,
         settings_inbox: Some(settings_inbox.clone()),
         db_bridge: Some(db_bridge),
+        connections,
     };
 
     let outcome = wisp_ui::run(config)?;
@@ -92,6 +96,36 @@ fn main() -> anyhow::Result<()> {
     saved.save()?;
 
     Ok(())
+}
+
+fn load_connection_hub(
+    paths: &WispPaths,
+    secrets: wisp_store::SharedSecretStore,
+    inbox: &Arc<Mutex<SettingsInbox>>,
+) -> Option<Arc<ConnectionHub>> {
+    match ConnectionHub::load(paths.clone(), secrets.clone()) {
+        Ok(hub) => Some(Arc::new(hub)),
+        Err(ConnectionHubError::Load(ConnectionsLoadError::Corrupt { message, .. })) => {
+            if let Ok(mut guard) = inbox.lock() {
+                guard.toasts.push(SettingsToast {
+                    line: None,
+                    message,
+                });
+            }
+            Some(Arc::new(ConnectionHub::empty_at(
+                paths.connections_toml(),
+                secrets,
+            )))
+        }
+        Err(ConnectionHubError::Load(ConnectionsLoadError::Io(err))) => {
+            eprintln!("connections: {err}");
+            None
+        }
+        Err(err) => {
+            eprintln!("connections: {err}");
+            None
+        }
+    }
 }
 
 fn start_settings_watcher(store: Arc<Mutex<SettingsStore>>, inbox: Arc<Mutex<SettingsInbox>>) {
