@@ -141,10 +141,26 @@ pub enum EnvironmentTag {
     Custom(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SslTrustStore {
+    #[default]
+    System,
+    CustomCa,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SslSettings {
     #[serde(default)]
     pub mode: SslMode,
+    #[serde(default)]
+    pub trust: SslTrustStore,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_cert_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_key_file: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -158,6 +174,15 @@ pub enum SslMode {
     VerifyFull,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SshAuthMethod {
+    #[default]
+    Agent,
+    Password,
+    PublicKey,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SshSettings {
     #[serde(default)]
@@ -168,4 +193,12 @@ pub struct SshSettings {
     pub port: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
+    #[serde(default)]
+    pub auth: SshAuthMethod,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_file: Option<String>,
+    #[serde(default)]
+    pub use_agent: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_host: Option<String>,
 }

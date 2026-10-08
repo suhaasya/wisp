@@ -9,6 +9,7 @@ mod store;
 pub use parse::{parse_connections_toml, ConnectionsParseError};
 pub use schema::{
     ConnectionEngine, ConnectionFolder, ConnectionId, ConnectionProfile, ConnectionsFile,
-    EnvironmentTag, SslMode, SslSettings, SshSettings, TransportKind, CONNECTIONS_VERSION,
+    EnvironmentTag, SslMode, SslSettings, SslTrustStore, SshAuthMethod, SshSettings, TransportKind,
+    CONNECTIONS_VERSION,
 };
 pub use store::{ConnectionStore, ConnectionStoreError, ConnectionsLoadError};

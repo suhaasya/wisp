@@ -1,13 +1,16 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
+use std::{cell::RefCell, rc::Rc, sync::{Arc, Mutex}, time::Instant};
 
 use gpui::{
     div, prelude::*, px, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
-    SharedString, StatefulInteractiveElement, Styled, Window, WindowBounds,
+    SharedString, StatefulInteractiveElement, Styled, Task, Window, WindowBounds,
 };
-use wisp_core::ConnectionHub;
+use wisp_core::{
+    bridge::DbEventPayload, ConnectionHub, DbCommandPayload, SessionOpenSpec, SessionPhase,
+    WorkspaceSessionStore,
+};
 
 use crate::connections::{
-    ConnectionManager, ShellCommand, ShellCommandSender,
+    ConnectionForm, ConnectionManager, ShellCommand, ShellCommandSender,
 };
 
 #[cfg(feature = "ui-gallery")]
@@ -22,8 +25,10 @@ use crate::{
     environment::Environment,
     launch::{AppearanceConfig, SharedSettingsInbox, ShellMetrics, WindowPersistence},
     memory,
+    multi_window::{drain_pending_windows, WindowOpenQueue},
     route::Route,
     theme::{self, ResolvedTheme},
+    workspace::WorkspaceView,
 };
 
 pub struct WispShell {
@@ -39,7 +44,14 @@ pub struct WispShell {
     settings_inbox: Option<SharedSettingsInbox>,
     settings_toast: Option<SharedString>,
     connection_commands: ShellCommandSender,
+    connections_hub: Option<Arc<ConnectionHub>>,
+    active_connection: Option<wisp_core::ConnectionId>,
+    session_open_task: Option<Task<()>>,
     connection_manager: Option<Entity<ConnectionManager>>,
+    connection_form: Option<Entity<ConnectionForm>>,
+    workspace: Option<Entity<WorkspaceView>>,
+    workspace_sessions: Arc<Mutex<WorkspaceSessionStore>>,
+    window_open_queue: WindowOpenQueue,
     #[cfg(feature = "ui-gallery")]
     gallery: Entity<ComponentGallery>,
 }
@@ -51,16 +63,32 @@ impl WispShell {
         appearance: Rc<RefCell<AppearanceConfig>>,
         settings_inbox: Option<SharedSettingsInbox>,
         connections: Option<Arc<ConnectionHub>>,
+        workspace_sessions: Arc<Mutex<WorkspaceSessionStore>>,
+        window_open_queue: WindowOpenQueue,
+        initial_connection: Option<wisp_core::ConnectionId>,
         #[cfg(feature = "ui-gallery")] gallery: Entity<ComponentGallery>,
         cx: &mut Context<Self>,
     ) -> Self {
         let connection_commands = ShellCommandSender::default();
-        let connection_manager = connections.map(|hub| {
+        let connection_manager = connections.as_ref().map(|hub| {
             let commands = connection_commands.clone();
-            cx.new(|cx| ConnectionManager::new(cx, hub, commands))
+            cx.new(|cx| ConnectionManager::new(cx, Arc::clone(hub), commands))
         });
-        Self {
-            route: Route::Connections,
+        let connection_form = connections.clone().map(|hub| {
+            let commands = connection_commands.clone();
+            cx.new(|cx| ConnectionForm::new(cx, hub, commands))
+        });
+        let workspace = connections.clone().map(|hub| {
+            cx.new(|cx| {
+                WorkspaceView::new(cx, Arc::clone(&hub), Arc::clone(&workspace_sessions))
+            })
+        });
+        let mut shell = Self {
+            route: if initial_connection.is_some() {
+                Route::Workspace
+            } else {
+                Route::Connections
+            },
             environment: Environment::Local,
             connection_status: "Not connected".into(),
             timing_status: "Ready".into(),
@@ -72,13 +100,25 @@ impl WispShell {
             settings_inbox,
             settings_toast: None,
             connection_commands,
+            connections_hub: connections.clone(),
+            active_connection: None,
+            session_open_task: None,
             connection_manager,
+            connection_form,
+            workspace,
+            workspace_sessions,
+            window_open_queue,
             #[cfg(feature = "ui-gallery")]
             gallery,
+        };
+        if let Some(id) = initial_connection {
+            shell.open_session(id, cx);
         }
+        shell
     }
 
     fn drain_connection_commands(&mut self, cx: &mut Context<Self>) {
+        self.poll_session_events(cx);
         let commands = self.connection_commands.drain();
         if commands.is_empty() {
             return;
@@ -86,15 +126,40 @@ impl WispShell {
         for command in commands {
             match command {
                 ShellCommand::Connect(id) => {
-                    self.connection_status = format!("Connected to {id}").into();
-                    self.timing_status = "Session open".into();
                     self.route = Route::Workspace;
+                    self.open_session(id, cx);
                 }
-                ShellCommand::Edit(_id) => {
+                ShellCommand::ConnectNewWindow(id) => {
+                    self.window_open_queue.request(id);
+                }
+                ShellCommand::Edit(id) => {
                     self.route = Route::ConnectionForm;
+                    if let Some(form) = self.connection_form.clone() {
+                        form.update(cx, |form, cx| form.open_edit(id, cx));
+                    }
                 }
                 ShellCommand::NewConnection => {
                     self.route = Route::ConnectionForm;
+                    if let Some(form) = self.connection_form.clone() {
+                        form.update(cx, |form, cx| form.open_new(cx));
+                    }
+                }
+                ShellCommand::NewConnectionFromDraft(draft) => {
+                    self.route = Route::ConnectionForm;
+                    if let Some(form) = self.connection_form.clone() {
+                        form.update(cx, |form, cx| form.open_with_draft(*draft, cx));
+                    }
+                }
+                ShellCommand::FormSaved { id, connect } => {
+                    if connect {
+                        self.route = Route::Workspace;
+                        self.open_session(id, cx);
+                    } else {
+                        self.route = Route::Connections;
+                    }
+                }
+                ShellCommand::FormCancelled => {
+                    self.route = Route::Connections;
                 }
             }
         }
@@ -133,6 +198,104 @@ impl WispShell {
         }
     }
 
+    fn open_session(&mut self, id: wisp_core::ConnectionId, cx: &mut Context<Self>) {
+        self.active_connection = Some(id);
+        if let Some(workspace) = self.workspace.clone() {
+            workspace.update(cx, |ws, cx| ws.set_connection(id, cx));
+        }
+        let Some(hub) = self.connections_hub.as_ref() else {
+            self.connection_status = "Not connected".into();
+            return;
+        };
+        let Some(profile) = hub.get(id) else {
+            self.connection_status = "Connection not found".into();
+            return;
+        };
+        let _ = hub.touch_connect(id);
+        self.environment = Environment::from_tag(&profile.env_tag);
+        self.connection_status = format!("Connecting to {}…", profile.name).into();
+        self.timing_status = "Opening session".into();
+        let spec = SessionOpenSpec {
+            profile,
+            secrets: hub.session_secrets(id),
+        };
+        let bridge = crate::bridge::db_bridge(cx);
+        let (_id, _cancel, task) = crate::bridge::spawn_db(
+            cx,
+            &bridge,
+            DbCommandPayload::SessionOpen(spec),
+            move |this, cx, result| {
+                this.session_open_task = None;
+                match result {
+                    Ok(DbEventPayload::SessionOpen(Ok(snap))) => {
+                        this.apply_session_snapshot(snap, cx);
+                    }
+                    Ok(DbEventPayload::SessionOpen(Err(err))) => {
+                        this.connection_status =
+                            format!("Connection failed — {}", err).into();
+                        this.timing_status = "Failed".into();
+                    }
+                    Ok(_) | Err(_) => {
+                        this.connection_status = "Connection failed".into();
+                        this.timing_status = "Failed".into();
+                    }
+                }
+                cx.notify();
+            },
+        );
+        self.session_open_task = Some(task);
+    }
+
+    fn apply_session_snapshot(
+        &mut self,
+        snap: wisp_core::SessionSnapshot,
+        cx: &mut Context<Self>,
+    ) {
+        let version = snap
+            .version
+            .as_deref()
+            .unwrap_or("database");
+        self.connection_status = format!("{} — {}", snap.name, snap.status_label()).into();
+        self.timing_status = version.into();
+        if let Some(id) = self.active_connection {
+            if let Some(workspace) = self.workspace.clone() {
+                workspace.update(cx, |ws, cx| ws.set_connection(id, cx));
+            }
+        }
+    }
+
+    fn poll_session_events(&mut self, cx: &mut Context<Self>) {
+        let Some(active) = self.active_connection else {
+            return;
+        };
+        let bridge = crate::bridge::db_bridge(cx);
+        while let Some(event) = bridge.poll_session_event() {
+            if event.connection_id != active {
+                continue;
+            }
+            let label = match event.phase {
+                SessionPhase::Connecting => "Connecting…",
+                SessionPhase::Ready => "Connected",
+                SessionPhase::Busy => "Busy",
+                SessionPhase::Reconnecting => "Reconnecting…",
+                SessionPhase::Failed => "Connection failed",
+                SessionPhase::Closed => "Closed",
+            };
+            if let Some(hub) = self.connections_hub.as_ref() {
+                if let Some(profile) = hub.get(active) {
+                    self.connection_status =
+                        format!("{} — {label}", profile.name).into();
+                }
+            }
+            if let Some(detail) = event.detail {
+                self.timing_status = detail.into();
+            } else if event.phase == SessionPhase::Ready {
+                self.timing_status = "Ready".into();
+            }
+            cx.notify();
+        }
+    }
+
     fn report_first_frame(&mut self) {
         if self.first_frame_reported {
             return;
@@ -151,19 +314,24 @@ impl Render for WispShell {
         self.report_first_frame();
         self.drain_settings_inbox(cx);
         self.drain_connection_commands(cx);
+        drain_pending_windows(cx);
         capture_window_state(window, &self.persistence);
 
         let theme = theme::read_global(cx).resolved().clone();
         let colors = &theme.colors;
         let env_color = self.environment.color(&colors.env);
         let env_on_color = self.environment.on_color(&colors.env);
+        let production = self.environment.is_production();
         let route = self.route;
         let title = route.title();
         let env_label = self.environment.label();
         let memory_mb = memory::memory_megabytes();
         let memory_pct = (memory_mb / 40.0).clamp(0.0, 1.0);
         let connection = self.connection_status.clone();
-        let timing = self.timing_status.clone();
+        let timing = crate::grid::grid_status(cx)
+            .take_line()
+            .map(SharedString::from)
+            .unwrap_or_else(|| self.timing_status.clone());
         let status_h = theme.density.status_bar_height();
 
         div()
@@ -181,6 +349,7 @@ impl Render for WispShell {
                 env_label,
                 env_color,
                 env_on_color,
+                production,
                 route,
                 self.appearance.clone(),
             ))
@@ -225,46 +394,42 @@ fn render_route(shell: &WispShell, route: Route, theme: &ResolvedTheme) -> impl 
                     )
             }
         }
-        Route::ConnectionForm => div()
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(c.canvas)
-            .child(
+        Route::ConnectionForm => {
+            if let Some(form) = &shell.connection_form {
+                div().size_full().child(form.clone())
+            } else {
                 div()
-                    .w(px(640.0))
-                    .bg(c.panel)
-                    .border_1()
-                    .border_color(c.line)
-                    .rounded_lg()
-                    .p_4()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(c.canvas)
                     .child(
                         div()
-                            .text_lg()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(c.ink1)
-                            .child("New connection"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
                             .text_sm()
                             .text_color(c.ink3)
-                            .child("Connection form content arrives in a later milestone."),
-                    ),
-            ),
-        Route::Workspace => div()
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(c.canvas)
-            .child(
+                            .child("Connection store unavailable."),
+                    )
+            }
+        }
+        Route::Workspace => {
+            if let Some(workspace) = &shell.workspace {
+                div().size_full().child(workspace.clone())
+            } else {
                 div()
-                    .text_color(c.ink3)
-                    .child("Workspace shell (query editor + grid) lands in later milestones."),
-            ),
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(c.canvas)
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(c.ink3)
+                            .child("Connection store unavailable."),
+                    )
+            }
+        }
     }
 }
 
@@ -276,6 +441,7 @@ fn title_bar(
     env_label: &str,
     env_color: gpui::Rgba,
     env_on_color: gpui::Rgba,
+    production: bool,
     route: Route,
     appearance: Rc<RefCell<AppearanceConfig>>,
 ) -> impl IntoElement {
@@ -311,13 +477,24 @@ fn title_bar(
                         .child(
                             div()
                                 .text_xs()
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .font_weight(if production {
+                                    gpui::FontWeight::BOLD
+                                } else {
+                                    gpui::FontWeight::SEMIBOLD
+                                })
                                 .px_2()
                                 .py_0p5()
                                 .rounded_full()
                                 .text_color(env_on_color)
                                 .bg(env_color)
-                                .child(env_label.to_string()),
+                                .when(production, |badge| {
+                                    badge.border_2().border_color(gpui::rgb(0xffffff))
+                                })
+                                .child(if production {
+                                    format!("PRODUCTION · {env_label}")
+                                } else {
+                                    env_label.to_string()
+                                }),
                         ),
                 )
                 .child(
@@ -328,7 +505,12 @@ fn title_bar(
                         .children(title_nav_buttons(cx, c, route))
                 ),
         )
-        .child(div().h(px(2.0)).w_full().bg(env_color))
+        .child(
+            div()
+                .h(px(if production { 4.0 } else { 2.0 }))
+                .w_full()
+                .bg(env_color),
+        )
 }
 
 fn title_nav_buttons(

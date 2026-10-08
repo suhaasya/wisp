@@ -51,6 +51,10 @@ impl WispPaths {
     pub fn connections_toml(&self) -> PathBuf {
         self.config_dir.join("connections.toml")
     }
+
+    pub fn ssh_known_hosts(&self) -> PathBuf {
+        self.data_dir.join("ssh/known_hosts")
+    }
 }
 
 impl Default for WispPaths {

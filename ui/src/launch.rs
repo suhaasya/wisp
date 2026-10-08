@@ -2,7 +2,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use wisp_core::{ConnectionHub, DbBridge};
+use wisp_core::{ConnectionHub, ConnectionId, DbBridge, WorkspaceSessionStore};
+
+use crate::multi_window::WindowOpenQueue;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WindowGeometry {
@@ -40,7 +42,7 @@ pub struct SettingsInbox {
 
 pub type SharedSettingsInbox = Arc<Mutex<SettingsInbox>>;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct LaunchConfig {
     pub window: WindowPersistence,
     pub appearance: AppearanceConfig,
@@ -49,7 +51,13 @@ pub struct LaunchConfig {
     pub db_bridge: Option<Arc<DbBridge>>,
     /// Saved connection profiles (LUM-014 / LUM-015).
     pub connections: Option<Arc<ConnectionHub>>,
+    /// Open tabs per connection (LUM-026).
+    pub workspace_sessions: Arc<Mutex<WorkspaceSessionStore>>,
+    pub window_open_queue: WindowOpenQueue,
+    /// When set, this window opens directly into workspace for the connection.
+    pub initial_connection: Option<ConnectionId>,
 }
+
 
 #[derive(Debug, Clone, Default)]
 pub struct ShellMetrics {

@@ -9,6 +9,12 @@ use tokio::sync::Mutex;
 
 use mysql_async::{Conn, Opts, OptsBuilder, prelude::*};
 
+use crate::ssh_tunnel::{map_ssh_error, mysql_local_forward};
+use crate::tls::mysql_ssl_opts;
+use wisp_transport::SshSession;
+use crate::TlsInfo;
+use wisp_store::SslMode;
+
 use crate::{
     dialect::{Dialect, MysqlDialect},
     driver::{DbDriver, EngineKind, ExecuteStats, PageRequest, QueryId, ServerInfo},
@@ -30,6 +36,7 @@ struct MysqlState {
     in_tx: bool,
     active: Option<ActiveQuery>,
     next_query: AtomicU64,
+    ssh: Option<SshSession>,
 }
 
 impl MysqlState {
@@ -41,6 +48,7 @@ impl MysqlState {
             in_tx: false,
             active: None,
             next_query: AtomicU64::new(1),
+            ssh: None,
         }
     }
 
@@ -187,11 +195,11 @@ impl DbDriver for MysqlDriver {
     }
 
     fn server_info(&self) -> Result<ServerInfo, DriverError> {
-        self.state
-            .blocking_lock()
-            .server_info
-            .clone()
-            .ok_or(DriverError::NotConnected)
+        let state = Arc::clone(&self.state);
+        self.run(async move {
+            let guard = state.lock().await;
+            guard.server_info.clone().ok_or(DriverError::NotConnected)
+        })
     }
 
     fn dialect(&self) -> &dyn Dialect {
@@ -203,13 +211,33 @@ async fn connect_session(state: Arc<Mutex<MysqlState>>, config: MysqlConfig) -> 
     if state.lock().await.conn.is_some() {
         return Ok(());
     }
+    let mut connect_host = config.host.clone();
+    let mut connect_port = config.port;
+    let mut ssh_session = None;
+    if config.ssh.enabled {
+        let (local_port, session) = mysql_local_forward(
+            &config.ssh,
+            &config.ssh_secrets,
+            config.host.as_str(),
+            config.port,
+        )
+        .await
+        .map_err(map_ssh_error)?;
+        connect_host = "127.0.0.1".into();
+        connect_port = local_port;
+        ssh_session = Some(session);
+    }
+
     let mut builder = OptsBuilder::default()
-        .ip_or_hostname(config.host.as_str())
-        .tcp_port(config.port)
+        .ip_or_hostname(connect_host.as_str())
+        .tcp_port(connect_port)
         .user(Some(config.user.as_str()))
         .db_name(Some(config.database.as_str()));
     if let Some(password) = config.password.as_deref() {
         builder = builder.pass(Some(password));
+    }
+    if let Some(ssl_opts) = mysql_ssl_opts(&config.ssl) {
+        builder = builder.ssl_opts(ssl_opts);
     }
     let opts: Opts = builder.into();
     let mut conn = Conn::new(opts).await.map_err(map_mysql_err)?;
@@ -220,10 +248,17 @@ async fn connect_session(state: Arc<Mutex<MysqlState>>, config: MysqlConfig) -> 
             .map_err(map_mysql_err)?;
     }
     conn.query_drop("SELECT 1").await.map_err(map_mysql_err)?;
-    let info = load_server_info(&mut conn).await?;
+    let mut info = load_server_info(&mut conn).await?;
+    if config.ssl.mode != SslMode::Disable {
+        info.tls = Some(TlsInfo {
+            version: "TLS".into(),
+            cipher: "rustls".into(),
+        });
+    }
     let mut guard = state.lock().await;
     guard.server_info = Some(info);
     guard.conn = Some(conn);
+    guard.ssh = ssh_session;
     Ok(())
 }
 
@@ -234,6 +269,7 @@ async fn close_session(state: Arc<Mutex<MysqlState>>) -> Result<(), DriverError>
     guard.server_info = None;
     guard.in_tx = false;
     guard.active = None;
+    guard.ssh = None;
     Ok(())
 }
 
@@ -362,6 +398,7 @@ async fn load_server_info(conn: &mut Conn) -> Result<ServerInfo, DriverError> {
         version,
         database: database.unwrap_or_default(),
         user,
+        tls: None,
     })
 }
 

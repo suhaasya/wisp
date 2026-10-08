@@ -5,7 +5,7 @@ use std::sync::Arc;
 use gpui::{App, Context, Global, Task, WeakEntity};
 use tokio_util::sync::CancellationToken;
 use wisp_core::{
-    bridge::RequestId, DbBridge, DbCommandPayload, DbEventPayload, WispError,
+    bridge::RequestId, DbBridge, DbCommandPayload, DbEvent, DbEventPayload, WispError,
 };
 
 struct DbBridgeGlobal(Arc<DbBridge>);
@@ -33,7 +33,17 @@ pub fn spawn_db<T: 'static>(
     let task = cx.spawn(async move |this: WeakEntity<T>, cx| {
         let event = cx
             .background_executor()
-            .spawn(async move { done_rx.recv().expect("bridge dropped") })
+            .spawn(async move {
+                done_rx.recv().unwrap_or_else(|_| {
+                    DbEvent::completed(
+                        request_id,
+                        Err(WispError::internal(
+                            "Database worker stopped",
+                            "bridge channel closed",
+                        )),
+                    )
+                })
+            })
             .await;
         let result = event.result();
         this.update(cx, |view, cx| on_done(view, cx, result)).ok();

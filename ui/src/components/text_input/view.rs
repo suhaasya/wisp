@@ -80,6 +80,10 @@ impl TextInput {
         self.editor.content()
     }
 
+    pub fn set_content(&mut self, value: &str) {
+        self.editor = SingleLineEditor::new(value);
+    }
+
     pub fn set_theme(&mut self, theme: ResolvedTheme) {
         self.theme = theme;
     }

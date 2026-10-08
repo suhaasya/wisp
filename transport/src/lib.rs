@@ -3,8 +3,13 @@
 //! Owns wire-level connection setup and secure channel primitives. Must not depend on
 //! database drivers, session logic, UI, or persistent storage.
 
+pub mod ssh;
 pub mod tcp;
 
+pub use ssh::{
+    fingerprint_sha256, open_direct_tcpip, open_local_forward, OpenSshConfig, SshConnectParams,
+    SshError, SshSecrets, SshSession, SshTunnelStream,
+};
 pub use tcp::{connect_tcp, connect_with, AsyncDbStream, BoxDbStream};
 pub use tokio::net::TcpStream as PlainStream;
 

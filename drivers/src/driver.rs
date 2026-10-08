@@ -15,6 +15,19 @@ pub enum EngineKind {
     Mock,
 }
 
+/// Negotiated TLS parameters after a secure connect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TlsInfo {
+    pub version: String,
+    pub cipher: String,
+}
+
+impl TlsInfo {
+    pub fn summary(&self) -> String {
+        format!("{} / {}", self.version, self.cipher)
+    }
+}
+
 /// Static server description after connect.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerInfo {
@@ -22,6 +35,7 @@ pub struct ServerInfo {
     pub version: String,
     pub database: String,
     pub user: String,
+    pub tls: Option<TlsInfo>,
 }
 
 /// Window into a result set.

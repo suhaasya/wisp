@@ -5,7 +5,14 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use tokio_postgres::config::SslMode as PgSslMode;
+use tokio_postgres::tls::MakeTlsConnect;
 use tokio_postgres::{Client, Config, NoTls};
+use wisp_store::SslMode;
+
+use crate::ssh_tunnel::{map_ssh_error, postgres_tunnel};
+use crate::tls::{build_rustls_config, PostgresTlsMaker};
+use wisp_transport::SshSession;
 
 use crate::{
     dialect::{Dialect, PostgresDialect},
@@ -31,6 +38,8 @@ struct ActiveQuery {
 struct Session {
     client: Arc<Client>,
     connection: tokio::task::JoinHandle<()>,
+    tls_maker: Option<PostgresTlsMaker>,
+    ssh: Option<SshSession>,
 }
 
 struct PgState {
@@ -217,24 +226,93 @@ async fn connect_session(
         config.password.as_deref(),
     )?;
     let cfg = build_pg_config(&config, password);
-    let stream = wisp_transport::connect_tcp(&config.host, config.port)
-        .await
-        .map_err(|e| DriverError::user("TCP connect failed", e.to_string()))?;
+    let tls_config = build_rustls_config(&config.ssl, &config.host)
+        .map_err(|e| DriverError::user("TLS setup failed", e.to_string()))?;
+
+    let ssh_tunnel = if config.ssh.enabled {
+        Some(
+            postgres_tunnel(
+                &config.ssh,
+                &config.ssh_secrets,
+                config.host.as_str(),
+                config.port,
+            )
+            .await
+            .map_err(map_ssh_error)?,
+        )
+    } else {
+        None
+    };
+
+    if let Some(tunnel) = ssh_tunnel {
+        let (stream, ssh_session) = tunnel.into_parts();
+        if let Some(rustls) = tls_config {
+            let mut maker = PostgresTlsMaker::new(rustls);
+            let tls = maker.make_tls_connect(config.host.as_str()).map_err(|e| {
+                DriverError::user("TLS setup failed", e.to_string())
+            })?;
+            let (client, connection) = cfg
+                .connect_raw(stream, tls)
+                .await
+                .map_err(|e| DriverError::user("Could not connect to PostgreSQL", e.to_string()))?;
+            return install_pg_session(
+                state,
+                client,
+                connection,
+                Some(maker),
+                Some(ssh_session),
+            )
+            .await;
+        }
+        let (client, connection) = cfg
+            .connect_raw(stream, NoTls)
+            .await
+            .map_err(|e| DriverError::user("Could not connect to PostgreSQL", e.to_string()))?;
+        return install_pg_session(state, client, connection, None, Some(ssh_session)).await;
+    }
+    if let Some(rustls) = tls_config {
+        let maker = PostgresTlsMaker::new(rustls);
+        let (client, connection) = cfg
+            .connect(maker.clone())
+            .await
+            .map_err(|e| DriverError::user("Could not connect to PostgreSQL", e.to_string()))?;
+        return install_pg_session(state, client, connection, Some(maker), None).await;
+    }
     let (client, connection) = cfg
-        .connect_raw(stream, NoTls)
+        .connect(NoTls)
         .await
         .map_err(|e| DriverError::user("Could not connect to PostgreSQL", e.to_string()))?;
+    install_pg_session(state, client, connection, None, None).await
+}
+
+async fn install_pg_session(
+    state: Arc<Mutex<PgState>>,
+    client: Client,
+    connection: impl std::future::Future<Output = Result<(), tokio_postgres::Error>> + Send + 'static,
+    tls_maker: Option<PostgresTlsMaker>,
+    ssh: Option<SshSession>,
+) -> Result<(), DriverError> {
+    let mut info = load_server_info(&client).await?;
+    if let Some(ref maker) = tls_maker {
+        if let Some(neg) = maker.take_negotiated() {
+            info.tls = Some(crate::driver::TlsInfo {
+                version: neg.version,
+                cipher: neg.cipher,
+            });
+        }
+    }
     let join = tokio::spawn(async move {
         if let Err(err) = connection.await {
             eprintln!("postgres connection closed: {err}");
         }
     });
-    let info = load_server_info(&client).await?;
     let mut guard = state.lock().expect("pg state");
     guard.server_info = Some(info);
     guard.session = Some(Session {
         client: Arc::new(client),
         connection: join,
+        tls_maker,
+        ssh,
     });
     Ok(())
 }
@@ -393,10 +471,18 @@ async fn cancel_query(state: Arc<Mutex<PgState>>, query: QueryId) -> Result<(), 
         }
         active.cancel.clone()
     };
-    cancel
-        .cancel_query(NoTls)
-        .await
-        .map_err(|e| DriverError::user("Cancel failed", e.to_string()))?;
+    let tls_maker = state.lock().expect("pg state").session.as_ref().and_then(|s| s.tls_maker.clone());
+    if let Some(maker) = tls_maker {
+        cancel
+            .cancel_query(maker)
+            .await
+            .map_err(|e| DriverError::user("Cancel failed", e.to_string()))?;
+    } else {
+        cancel
+            .cancel_query(NoTls)
+            .await
+            .map_err(|e| DriverError::user("Cancel failed", e.to_string()))?;
+    }
     state.lock().expect("pg state").active = None;
     Ok(())
 }
@@ -427,6 +513,11 @@ fn build_pg_config(config: &PostgresConfig, password: Option<String>) -> Config 
         let ms = timeout.as_millis();
         cfg.options(format!("-c statement_timeout={ms}"));
     }
+    cfg.ssl_mode(match config.ssl.mode {
+        SslMode::Disable => PgSslMode::Disable,
+        SslMode::Prefer => PgSslMode::Prefer,
+        SslMode::Require | SslMode::VerifyCa | SslMode::VerifyFull => PgSslMode::Require,
+    });
     cfg
 }
 
@@ -440,6 +531,7 @@ async fn load_server_info(client: &Client) -> Result<ServerInfo, DriverError> {
         version: row.get(0),
         database: row.get(1),
         user: row.get(2),
+        tls: None,
     })
 }
 

@@ -12,17 +12,21 @@ mod mock;
 mod page;
 mod mysql;
 mod postgres;
+mod ssh_tunnel;
+mod tls;
 mod value;
 
 pub use arena::{BlobRef, StrRef};
 pub use column::ColumnMeta;
 pub use dialect::{Dialect, MysqlDialect, PostgresDialect};
 pub use driver::{
-    DbDriver, EngineKind, ExecuteStats, PageRequest, QueryId, ServerInfo,
+    DbDriver, EngineKind, ExecuteStats, PageRequest, QueryId, ServerInfo, TlsInfo,
 };
+pub use tls::{build_rustls_config, is_local_host, mysql_ssl_opts, TlsNegotiated, TlsSetupError};
 pub use error::DriverError;
 pub use mock::MockDriver;
 pub use mysql::{MysqlConfig, MysqlDriver};
+pub use ssh_tunnel::DriverSshSecrets;
 pub use postgres::{PostgresConfig, PostgresDriver};
 pub use page::{Page, PageArena, PageBuilder, PageError};
 pub use value::{BytesPreview, Value, BYTES_PREVIEW_MAX};

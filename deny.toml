@@ -26,6 +26,12 @@ highlight = "all"
 skip = []
 skip-tree = []
 
+[[bans.deny]]
+name = "openssl-sys"
+
+[[bans.deny]]
+name = "openssl"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "warn"

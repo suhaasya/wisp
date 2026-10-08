@@ -155,6 +155,7 @@ impl DbDriver for MockDriver {
             version: "mock-0.1".into(),
             database: "mock".into(),
             user: "mock".into(),
+            tls: None,
         })
     }
 

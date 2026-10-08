@@ -2,13 +2,20 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use wisp_core::ConnectionId;
+use wisp_core::{ConnectionFormDraft, ConnectionId};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ShellCommand {
     Connect(ConnectionId),
+    ConnectNewWindow(ConnectionId),
     Edit(ConnectionId),
     NewConnection,
+    NewConnectionFromDraft(Box<ConnectionFormDraft>),
+    FormSaved {
+        id: ConnectionId,
+        connect: bool,
+    },
+    FormCancelled,
 }
 
 #[derive(Clone, Default)]

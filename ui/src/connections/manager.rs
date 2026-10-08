@@ -5,13 +5,13 @@
 use std::{rc::Rc, sync::Arc};
 
 use gpui::{
-    div, prelude::*, px, uniform_list, ClickEvent, Context, Entity, FocusHandle,
+    div, prelude::*, px, uniform_list, ClickEvent, Context, Entity, FocusHandle, Focusable,
     InteractiveElement, IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement,
     Styled, UniformListScrollHandle, Window,
 };
 use wisp_core::{
-    ConnectionCardView, ConnectionEngineKind, ConnectionHub, ConnectionId, ConnectionsView,
-    EnvFilter, RailSelection,
+    parse_connection_paste, ConnectionCardView, ConnectionEngineKind, ConnectionHub, ConnectionId,
+    ConnectionsView, EnvFilter, RailSelection,
 };
 
 use crate::{
@@ -21,7 +21,7 @@ use crate::{
         text_input::{TextInput, TextInputKind},
     },
     connections::{
-        actions::NewConnection,
+        actions::{NewConnection, PasteConnectionUrl},
         env::{env_edge_colour, parse_edge_colour},
         shell_commands::{ShellCommand, ShellCommandSender},
     },
@@ -119,6 +119,22 @@ impl ConnectionManager {
     fn new_connection(&self) {
         self.commands.push(ShellCommand::NewConnection);
     }
+
+    fn paste_connection_url(&self, cx: &mut Context<Self>) {
+        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+            return;
+        };
+        if let Ok(draft) = parse_connection_paste(&text) {
+            self.commands
+                .push(ShellCommand::NewConnectionFromDraft(Box::new(draft)));
+        }
+    }
+}
+
+impl Focusable for ConnectionManager {
+    fn focus_handle(&self, _: &gpui::App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
 }
 
 impl Render for ConnectionManager {
@@ -138,8 +154,12 @@ impl Render for ConnectionManager {
             .text_size(self.theme.ui_font_size)
             .font(self.theme.typography.gpui_ui_font())
             .track_focus(&self.focus_handle)
+            .key_context("WispConnections")
             .on_action(cx.listener(|this, _: &NewConnection, _, _| {
                 this.new_connection();
+            }))
+            .on_action(cx.listener(|this, _: &PasteConnectionUrl, _, cx| {
+                this.paste_connection_url(cx);
             }))
             .on_key_down(cx.listener(
                 |this, event: &gpui::KeyDownEvent, _, cx| {
@@ -202,6 +222,7 @@ impl Render for ConnectionManager {
                                 self.selected_index,
                                 self.scroll.clone(),
                                 hub,
+                                self.commands.clone(),
                                 |this, id, cx| {
                                     this.connect(id);
                                     cx.notify();
@@ -296,6 +317,7 @@ fn home_body<V: 'static>(
     selected_index: usize,
     scroll: UniformListScrollHandle,
     hub: Arc<ConnectionHub>,
+    commands: ShellCommandSender,
     on_connect: impl Fn(&mut V, ConnectionId, &mut Context<V>) + 'static + Clone,
     on_edit: impl Fn(&mut V, ConnectionId, &mut Context<V>) + 'static + Clone,
     on_delete: impl Fn(&mut V, ConnectionId, SharedString, &mut Context<V>) + 'static + Clone,
@@ -328,7 +350,7 @@ fn home_body<V: 'static>(
             div()
                 .text_xs()
                 .text_color(c.ink3)
-                .child("Paste a URL anywhere to create a connection (coming soon).")
+                .child("Paste a connection URL with ⌘V to open a pre-filled form.")
                 .into_any_element(),
         ];
         if view.flat_cards.is_empty() {
@@ -348,6 +370,7 @@ fn home_body<V: 'static>(
                     selected_index,
                     scroll,
                     hub,
+                    commands.clone(),
                     on_connect.clone(),
                     on_edit.clone(),
                     on_delete.clone(),
@@ -363,6 +386,7 @@ fn home_body<V: 'static>(
                     view,
                     selected_index,
                     hub,
+                    commands,
                     on_connect,
                     on_edit,
                     on_delete,
@@ -381,6 +405,7 @@ fn grouped_grid<V: 'static>(
     view: &ConnectionsView,
     selected_index: usize,
     hub: Arc<ConnectionHub>,
+    commands: ShellCommandSender,
     on_connect: impl Fn(&mut V, ConnectionId, &mut Context<V>) + 'static + Clone,
     on_edit: impl Fn(&mut V, ConnectionId, &mut Context<V>) + 'static + Clone,
     on_delete: impl Fn(&mut V, ConnectionId, SharedString, &mut Context<V>) + 'static + Clone,
@@ -416,6 +441,7 @@ fn grouped_grid<V: 'static>(
                             card,
                             ix == selected_index,
                             hub.clone(),
+                            commands.clone(),
                             on_connect.clone(),
                             on_edit.clone(),
                             on_delete.clone(),
@@ -436,6 +462,7 @@ fn virtualized_grid<V: 'static>(
     selected_index: usize,
     scroll: UniformListScrollHandle,
     hub: Arc<ConnectionHub>,
+    commands: ShellCommandSender,
     on_connect: impl Fn(&mut V, ConnectionId, &mut Context<V>) + 'static + Clone,
     on_edit: impl Fn(&mut V, ConnectionId, &mut Context<V>) + 'static + Clone,
     on_delete: impl Fn(&mut V, ConnectionId, SharedString, &mut Context<V>) + 'static + Clone,
@@ -465,6 +492,7 @@ fn virtualized_grid<V: 'static>(
                                 card,
                                 ix == selected_index,
                                 hub.clone(),
+                                commands.clone(),
                                 on_connect.clone(),
                                 on_edit.clone(),
                                 on_delete.clone(),
@@ -487,6 +515,7 @@ fn connection_card<V: 'static>(
     card: &ConnectionCardView,
     selected: bool,
     hub: Arc<ConnectionHub>,
+    commands: ShellCommandSender,
     on_connect: impl Fn(&mut V, ConnectionId, &mut Context<V>) + 'static + Clone,
     on_edit: impl Fn(&mut V, ConnectionId, &mut Context<V>) + 'static + Clone,
     on_delete: impl Fn(&mut V, ConnectionId, SharedString, &mut Context<V>) + 'static + Clone,
@@ -505,6 +534,8 @@ fn connection_card<V: 'static>(
     let edit = on_edit.clone();
     let delete = on_delete.clone();
     let select = on_select.clone();
+    let commands_window = commands.clone();
+    let commands_shift = commands.clone();
     let drag_id = id;
     let (eng_label, eng_bg) = engine_badge(card.engine);
 
@@ -610,6 +641,14 @@ fn connection_card<V: 'static>(
                         .flex()
                         .gap_1()
                         .mt_1()
+                        .child(mini_action(cx, c, "Window", {
+                            let commands = commands_window.clone();
+                            let hub = hub.clone();
+                            move |_, _, _| {
+                                let _ = hub.touch_connect(id);
+                                commands.push(ShellCommand::ConnectNewWindow(id));
+                            }
+                        }))
                         .child(mini_action(cx, c, "Edit", {
                             let edit = edit.clone();
                             move |this, _, cx| edit(this, id, cx)
@@ -630,7 +669,12 @@ fn connection_card<V: 'static>(
         )
         .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
             if event.click_count() >= 2 {
-                connect(this, id, cx);
+                if event.modifiers().shift {
+                    let _ = hub.clone().touch_connect(id);
+                    commands_shift.push(ShellCommand::ConnectNewWindow(id));
+                } else {
+                    connect(this, id, cx);
+                }
             } else {
                 select(this, index, cx);
             }

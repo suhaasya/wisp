@@ -9,7 +9,7 @@ use std::{
 };
 
 use clap::Parser;
-use wisp_core::{ConnectionHub, ConnectionHubError, DbBridge, DbRuntimeConfig};
+use wisp_core::{ConnectionHub, ConnectionHubError, DbBridge, DbRuntimeConfig, WorkspaceSessionStore};
 use wisp_store::{
     settings::{spawn_settings_watcher, SettingsStore, SettingsWatchEvent},
     window::WindowState,
@@ -18,7 +18,7 @@ use wisp_store::{
 };
 use wisp_ui::{
     AppearanceConfig, Density, LaunchConfig, MonoFontChoice, SettingsInbox, SettingsToast,
-    ThemeMode, UiFontChoice, WindowGeometry, WindowPersistence,
+    ThemeMode, UiFontChoice, WindowGeometry, WindowOpenQueue, WindowPersistence,
 };
 
 #[derive(Parser)]
@@ -56,6 +56,11 @@ fn main() -> anyhow::Result<()> {
         appearance_from_settings(guard.get().appearance.clone())
     };
 
+    let workspace_sessions = std::sync::Arc::new(std::sync::Mutex::new(WorkspaceSessionStore::load(
+        &paths,
+    )));
+    let workspace_sessions_for_save = std::sync::Arc::clone(&workspace_sessions);
+
     let config = LaunchConfig {
         window: WindowPersistence {
             maximized: stored.maximized,
@@ -68,11 +73,15 @@ fn main() -> anyhow::Result<()> {
         },
         appearance,
         settings_inbox: Some(settings_inbox.clone()),
-        db_bridge: Some(db_bridge),
+        db_bridge: Some(Arc::clone(&db_bridge)),
         connections,
+        workspace_sessions,
+        window_open_queue: WindowOpenQueue::default(),
+        initial_connection: None,
     };
 
     let outcome = wisp_ui::run(config)?;
+    db_bridge.shutdown_sessions();
 
     {
         let mut guard = store.lock().expect("settings store lock");
@@ -94,6 +103,10 @@ fn main() -> anyhow::Result<()> {
             }),
     };
     saved.save()?;
+
+    if let Ok(store) = workspace_sessions_for_save.lock() {
+        let _ = store.save();
+    }
 
     Ok(())
 }

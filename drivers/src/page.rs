@@ -84,6 +84,16 @@ impl Page {
         };
         Some(self.arena.get(preview.prefix))
     }
+
+    /// Approximate heap footprint for pager memory caps (arena + column vectors).
+    pub fn approx_bytes(&self) -> usize {
+        let mut bytes = self.arena.bytes().len();
+        for col in &self.columns_data {
+            bytes += col.len() * std::mem::size_of::<Value>();
+            bytes += col.capacity() * std::mem::size_of::<Value>();
+        }
+        bytes + self.columns.capacity() * std::mem::size_of::<ColumnMeta>()
+    }
 }
 
 /// Builds a [`Page`] row by row while preserving one arena and one buffer per column.

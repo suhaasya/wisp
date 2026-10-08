@@ -11,4 +11,11 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+async-trait = "0.1.92"
+hex = "0.4.3"
+home = "0.5.12"
+russh = { version = "0.64", default-features = false, features = ["ring", "rsa", "async-trait"] }
+wisp-store = { path = "../store", version = "0.1.0" }
+sha2 = "0.11.0"
+thiserror.workspace = true
 tokio.workspace = true

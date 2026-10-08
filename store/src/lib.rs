@@ -12,7 +12,9 @@ pub mod window;
 pub use connections::{
     parse_connections_toml, ConnectionEngine, ConnectionFolder, ConnectionId, ConnectionProfile,
     ConnectionStore, ConnectionStoreError, ConnectionsFile, ConnectionsLoadError,
-    ConnectionsParseError, EnvironmentTag, SslMode, SslSettings, SshSettings, TransportKind,
+    ConnectionsParseError, EnvironmentTag, SslMode, SslSettings, SslTrustStore, SshAuthMethod,
+    SshSettings,
+    TransportKind,
     CONNECTIONS_VERSION,
 };
 pub use paths::WispPaths;

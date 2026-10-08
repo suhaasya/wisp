@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wisp
+      POSTGRES_PASSWORD: wisp
+      POSTGRES_DB: wisp_bench
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wisp -d wisp_bench"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [dbnet]
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: wisp
+      MYSQL_DATABASE: wisp_bench
+      MYSQL_USER: wisp
+      MYSQL_PASSWORD: wisp
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-pwisp"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks: [dbnet]
+
+  bastion:
+    build: ./docker/ssh-it
+    ports:
+      - "2222:22"
+    volumes:
+      - ./docker/ssh-it/keys:/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    networks: [dbnet]
+
+networks:
+  dbnet:

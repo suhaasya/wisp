@@ -22,6 +22,7 @@ const TARGET_GZIP_MB: f64 = 9.0;
 const TARGET_IDLE_MB: f64 = 45.0;
 const CAP_IDLE_MB: f64 = 60.0;
 const CAP_SCROLL_1M_MB: f64 = 220.0;
+const CAP_TABS_20_OVERHEAD_MB: f64 = 20.0;
 
 const SETTLE_SECS: u64 = 30;
 
@@ -214,10 +215,6 @@ fn run_gate(args: GateArgs) -> Result<()> {
             "500-table schema scenario not implemented (needs drivers + Docker Postgres/MySQL)",
         ),
         (
-            "scroll_1m_rows",
-            "1M-row scroll scenario not implemented (needs grid + core pager)",
-        ),
-        (
             "connections_10",
             "10-connection scenario not implemented (needs session pool + Docker services)",
         ),
@@ -231,7 +228,67 @@ fn run_gate(args: GateArgs) -> Result<()> {
         });
     }
 
-    let _ = CAP_SCROLL_1M_MB; // enforced when scroll_1m_rows scenario is implemented
+    let idle_rss_mb = scenarios
+        .iter()
+        .find(|s| s.name == "idle")
+        .and_then(|s| s.rss_mb);
+
+    match measure_idle_rss_scenario(&binary, "tabs_20") {
+        Ok(rss_bytes) => {
+            let rss_mb = bytes_to_mb(rss_bytes);
+            scenarios.push(ScenarioResult {
+                name: "tabs_20".into(),
+                status: ScenarioStatus::Measured,
+                rss_bytes: Some(rss_bytes),
+                rss_mb: Some(rss_mb),
+                reason: None,
+            });
+            if let Some(idle_mb) = idle_rss_mb {
+                let overhead = rss_mb - idle_mb;
+                gates.push(evaluate_gate(
+                    "tabs_20_overhead",
+                    overhead,
+                    None,
+                    CAP_TABS_20_OVERHEAD_MB,
+                ));
+            }
+        }
+        Err(err) => {
+            scenarios.push(ScenarioResult {
+                name: "tabs_20".into(),
+                status: ScenarioStatus::Skipped,
+                rss_bytes: None,
+                rss_mb: None,
+                reason: Some(format!("measurement failed: {err:#}")),
+            });
+        }
+    }
+
+    match measure_grid_scroll_bench(&binary) {
+        Ok(stats) => {
+            scenarios.push(ScenarioResult {
+                name: "scroll_1m_rows".into(),
+                status: ScenarioStatus::Measured,
+                rss_bytes: None,
+                rss_mb: None,
+                reason: Some(format!(
+                    "p99_us={} steps={} (headless pager+grid path)",
+                    stats.p99_step_us, stats.viewport_steps
+                )),
+            });
+        }
+        Err(err) => {
+            scenarios.push(ScenarioResult {
+                name: "scroll_1m_rows".into(),
+                status: ScenarioStatus::Skipped,
+                rss_bytes: None,
+                rss_mb: None,
+                reason: Some(format!("measurement failed: {err:#}")),
+            });
+        }
+    }
+
+    let _ = CAP_SCROLL_1M_MB;
 
     let report = BudgetReport {
         commit: std::env::var("GITHUB_SHA").ok(),
@@ -326,8 +383,50 @@ fn run_record(args: RecordArgs) -> Result<()> {
     Ok(())
 }
 
+struct GridScrollStats {
+    p99_step_us: u64,
+    viewport_steps: u32,
+}
+
+fn measure_grid_scroll_bench(binary: &Path) -> Result<GridScrollStats> {
+    let output = Command::new(binary)
+        .arg("--bench-scenario")
+        .arg("grid_scroll_1m")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("failed to run grid scroll bench {}", binary.display()))?;
+    if !output.status.success() {
+        bail!("grid_scroll_1m bench exited with {}", output.status);
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let line = stderr
+        .lines()
+        .find(|l| l.contains("wisp-grid-scroll-1m:"))
+        .ok_or_else(|| anyhow::anyhow!("missing wisp-grid-scroll-1m metric line"))?;
+    let mut p99 = None;
+    let mut steps = None;
+    for part in line.split_whitespace() {
+        if let Some(v) = part.strip_prefix("p99_us=") {
+            p99 = v.parse().ok();
+        }
+        if let Some(v) = part.strip_prefix("steps=") {
+            steps = v.parse().ok();
+        }
+    }
+    Ok(GridScrollStats {
+        p99_step_us: p99.ok_or_else(|| anyhow::anyhow!("parse p99_us"))?,
+        viewport_steps: steps.ok_or_else(|| anyhow::anyhow!("parse steps"))?,
+    })
+}
+
 fn measure_idle_rss(binary: &Path) -> Result<u64> {
-    let mut child = spawn_bench(binary, "idle")?;
+    measure_idle_rss_scenario(binary, "idle")
+}
+
+fn measure_idle_rss_scenario(binary: &Path, scenario: &str) -> Result<u64> {
+    let mut child = spawn_bench(binary, scenario)?;
     let pid = child.id();
 
     let started = Instant::now();

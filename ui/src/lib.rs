@@ -12,11 +12,13 @@ pub mod connections;
 mod environment;
 mod launch;
 mod memory;
+mod multi_window;
 pub mod prelude;
 mod route;
 mod shell;
 pub mod components;
 pub mod theme;
+pub mod workspace;
 
 pub mod grid;
 pub mod render;
@@ -26,6 +28,7 @@ pub use launch::{
     AppearanceConfig, LaunchConfig, LaunchOutcome, SettingsInbox, SettingsToast, SharedSettingsInbox,
     ShellMetrics, WindowGeometry, WindowPersistence,
 };
+pub use multi_window::WindowOpenQueue;
 pub use route::Route;
 pub use theme::{Density, MonoFontChoice, ThemeMode, UiFontChoice};
 /// Placeholder until GPUI integration lands in LUM-005.

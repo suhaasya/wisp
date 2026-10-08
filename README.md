@@ -56,7 +56,10 @@ Release/dist profiles and size budgets: [docs/budgets.md](docs/budgets.md). Meas
 - **LUM-012** — PostgreSQL driver (TCP, plain auth)
 - **LUM-013** — MySQL / MariaDB driver (TCP, plain auth)
 - **LUM-014** — connection model and saved connections
-- **LUM-015** — connection manager welcome screen (current)
+- **LUM-015** — connection manager welcome screen
+- **LUM-016** — connection form, validation, and test
+- **LUM-017** — connection URL parser and paste-to-create
+- **LUM-018** — SSL/TLS support (rustls, connection form SSL tab) (current)
 
 ## License
 

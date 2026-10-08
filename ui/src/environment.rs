@@ -1,6 +1,7 @@
 //! Connection environment indicator (title strip + status dot).
 
 use gpui::Rgba;
+use wisp_core::EnvironmentTag;
 
 use crate::theme::EnvColors;
 
@@ -39,5 +40,19 @@ impl Environment {
             Self::Staging => env.on_staging,
             Self::Production => env.on_production,
         }
+    }
+
+    pub fn from_tag(tag: &EnvironmentTag) -> Self {
+        match tag {
+            EnvironmentTag::Production => Self::Production,
+            EnvironmentTag::Staging => Self::Staging,
+            EnvironmentTag::Development => Self::Dev,
+            EnvironmentTag::Custom(label) if label.eq_ignore_ascii_case("local") => Self::Local,
+            EnvironmentTag::Custom(_) => Self::Dev,
+        }
+    }
+
+    pub fn is_production(self) -> bool {
+        matches!(self, Self::Production)
     }
 }

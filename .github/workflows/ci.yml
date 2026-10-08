@@ -52,6 +52,14 @@ jobs:
       - name: clippy
         run: cargo xtask ci clippy
 
+      - name: no OpenSSL in dependency tree (LUM-018)
+        run: |
+          if cargo tree -p wisp --format '{p}' | grep -Eiq 'openssl'; then
+            echo "OpenSSL must not appear in the Wisp dependency tree"
+            cargo tree -p wisp -i openssl-sys 2>/dev/null || true
+            exit 1
+          fi
+
       - name: deny
         run: cargo xtask ci deny
 
@@ -176,6 +184,46 @@ jobs:
           MYSQL_DATABASE: wisp_bench
           MYSQL_PORT: "3306"
         run: cargo test -p wisp-drivers --test mysql_integration
+
+  ssh-tunnel:
+    name: ssh tunnel (LUM-019)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ssh-tunnel
+          save-if: true
+
+      - name: Start SSH bastion stack
+        run: docker compose -f docker-compose.ssh-it.yml up -d --wait --build
+
+      - name: integration tests
+        env:
+          WISP_SSH_IT: "1"
+          WISP_SSH_TOFU: "1"
+          WISP_SSH_HOST: 127.0.0.1
+          WISP_SSH_PORT: "2222"
+          WISP_SSH_USER: wisp
+          WISP_SSH_PASSWORD: wisp
+          WISP_SSH_AUTH: password
+          PGHOST: postgres
+          PGUSER: wisp
+          PGPASSWORD: wisp
+          PGDATABASE: wisp_bench
+          PGPORT: "5432"
+          MYSQL_HOST: mysql
+          MYSQL_USER: wisp
+          MYSQL_PASSWORD: wisp
+          MYSQL_DATABASE: wisp_bench
+          MYSQL_PORT: "3306"
+        run: cargo test -p wisp-drivers --test ssh_integration
 
   # Build matrix disabled temporarily — re-enable when ready for 5-target release CI (LUM-003).
   #

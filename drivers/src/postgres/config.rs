@@ -1,6 +1,10 @@
-//! PostgreSQL connection settings (plain TCP; TLS in LUM-018).
+//! PostgreSQL connection settings (TCP + optional TLS).
 
 use std::time::Duration;
+
+use wisp_store::{SshSettings, SslSettings};
+
+use crate::ssh_tunnel::DriverSshSecrets;
 
 /// TCP connection parameters for [`super::PostgresDriver`].
 #[derive(Debug, Clone)]
@@ -13,6 +17,9 @@ pub struct PostgresConfig {
     pub password: Option<String>,
     pub statement_timeout: Option<Duration>,
     pub application_name: String,
+    pub ssl: SslSettings,
+    pub ssh: SshSettings,
+    pub ssh_secrets: DriverSshSecrets,
 }
 
 impl Default for PostgresConfig {
@@ -25,6 +32,9 @@ impl Default for PostgresConfig {
             password: None,
             statement_timeout: Some(Duration::from_secs(30)),
             application_name: "wisp".into(),
+            ssl: SslSettings::default(),
+            ssh: SshSettings::default(),
+            ssh_secrets: DriverSshSecrets::default(),
         }
     }
 }
@@ -48,6 +58,29 @@ impl PostgresConfig {
         }
         if let Ok(password) = std::env::var("PGPASSWORD") {
             cfg.password = Some(password);
+        }
+        if std::env::var_os("WISP_SSH_IT").is_some() {
+            cfg.ssh.enabled = true;
+            cfg.ssh.host = std::env::var("WISP_SSH_HOST").ok();
+            cfg.ssh.port = std::env::var("WISP_SSH_PORT")
+                .ok()
+                .and_then(|p| p.parse().ok());
+            cfg.ssh.user = std::env::var("WISP_SSH_USER").ok();
+            if let Ok(auth) = std::env::var("WISP_SSH_AUTH") {
+                cfg.ssh.auth = match auth.as_str() {
+                    "password" => wisp_store::SshAuthMethod::Password,
+                    "public_key" => wisp_store::SshAuthMethod::PublicKey,
+                    _ => wisp_store::SshAuthMethod::Agent,
+                };
+            }
+            cfg.ssh.use_agent = std::env::var_os("WISP_SSH_USE_AGENT").is_some();
+            cfg.ssh.identity_file = std::env::var("WISP_SSH_IDENTITY_FILE").ok();
+            if let Ok(pw) = std::env::var("WISP_SSH_PASSWORD") {
+                cfg.ssh_secrets.password = Some(pw);
+            }
+            if let Ok(pp) = std::env::var("WISP_SSH_KEY_PASSPHRASE") {
+                cfg.ssh_secrets.key_passphrase = Some(pp);
+            }
         }
         cfg
     }
