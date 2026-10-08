@@ -5,6 +5,7 @@ use gpui::{point, prelude::*, px, size, App, Bounds, WindowBounds, WindowOptions
 use gpui_platform::application;
 
 use crate::{
+    components::text_input::bind_text_input_keys,
     launch::{LaunchConfig, LaunchOutcome, ShellMetrics, WindowPersistence},
     memory,
     shell::WispShell,
@@ -32,6 +33,7 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                 prefs.mono_font,
             );
             drop(prefs);
+            bind_text_input_keys(cx);
 
             let bounds = window_bounds_from_persistence(&persistence.borrow(), cx);
 
@@ -50,8 +52,27 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                     let metrics = metrics.clone();
                     let appearance = appearance.clone();
                     move |_, cx| {
-                        cx.new(move |_| {
-                            WispShell::new(persistence.clone(), metrics.clone(), appearance.clone())
+                        #[allow(unused_variables)]
+                        cx.new(|cx| {
+                            #[cfg(feature = "ui-gallery")]
+                            {
+                                let gallery =
+                                    cx.new(crate::components::gallery::ComponentGallery::new);
+                                WispShell::new(
+                                    persistence.clone(),
+                                    metrics.clone(),
+                                    appearance.clone(),
+                                    gallery,
+                                )
+                            }
+                            #[cfg(not(feature = "ui-gallery"))]
+                            {
+                                WispShell::new(
+                                    persistence.clone(),
+                                    metrics.clone(),
+                                    appearance.clone(),
+                                )
+                            }
                         })
                     }
                 },

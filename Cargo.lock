@@ -6298,6 +6298,7 @@ dependencies = [
  "gpui_platform",
  "serde",
  "sysinfo 0.33.1",
+ "unicode-segmentation",
  "wisp-core",
 ]
 

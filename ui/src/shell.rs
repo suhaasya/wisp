@@ -5,6 +5,13 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, WindowBounds,
 };
 
+#[cfg(feature = "ui-gallery")]
+use gpui::Entity;
+
+#[cfg(feature = "ui-gallery")]
+use crate::components::gallery::ComponentGallery;
+
+
 use crate::{
     environment::Environment,
     launch::{AppearanceConfig, ShellMetrics, WindowPersistence},
@@ -23,6 +30,8 @@ pub struct WispShell {
     persistence: Rc<RefCell<WindowPersistence>>,
     metrics: Rc<RefCell<ShellMetrics>>,
     appearance: Rc<RefCell<AppearanceConfig>>,
+    #[cfg(feature = "ui-gallery")]
+    gallery: Entity<ComponentGallery>,
 }
 
 impl WispShell {
@@ -30,6 +39,7 @@ impl WispShell {
         persistence: Rc<RefCell<WindowPersistence>>,
         metrics: Rc<RefCell<ShellMetrics>>,
         appearance: Rc<RefCell<AppearanceConfig>>,
+        #[cfg(feature = "ui-gallery")] gallery: Entity<ComponentGallery>,
     ) -> Self {
         Self {
             route: Route::Connections,
@@ -41,6 +51,8 @@ impl WispShell {
             persistence,
             metrics,
             appearance,
+            #[cfg(feature = "ui-gallery")]
+            gallery,
         }
     }
 
@@ -98,7 +110,7 @@ impl Render for WispShell {
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
-                    .child(render_route(route, &theme)),
+                    .child(render_route(self, route, &theme)),
             )
             .child(status_bar(
                 &theme, status_h, env_color, connection, timing, memory_mb, memory_pct,
@@ -106,9 +118,12 @@ impl Render for WispShell {
     }
 }
 
-fn render_route(route: Route, theme: &ResolvedTheme) -> impl IntoElement {
+#[allow(unused_variables)]
+fn render_route(shell: &WispShell, route: Route, theme: &ResolvedTheme) -> impl IntoElement {
     let c = &theme.colors;
     match route {
+        #[cfg(feature = "ui-gallery")]
+        Route::Gallery => div().size_full().child(shell.gallery.clone()),
         Route::Connections => div()
             .size_full()
             .flex()
@@ -236,18 +251,40 @@ fn title_bar(
                         .flex()
                         .gap_2()
                         .child(theme_toggle(cx, c, appearance))
-                        .child(if route == Route::Connections {
-                            nav_button(cx, c, "new-connection", "New connection", |this| {
-                                this.route = Route::ConnectionForm;
-                            })
-                        } else {
-                            nav_button(cx, c, "back-connections", "Back", |this| {
-                                this.route = Route::Connections;
-                            })
-                        }),
+                        .children(title_nav_buttons(cx, c, route))
                 ),
         )
         .child(div().h(px(2.0)).w_full().bg(env_color))
+}
+
+fn title_nav_buttons(
+    cx: &mut Context<WispShell>,
+    c: &theme::ResolvedColors,
+    route: Route,
+) -> Vec<gpui::AnyElement> {
+    let mut buttons = Vec::new();
+    #[cfg(feature = "ui-gallery")]
+    if route != Route::Gallery {
+        buttons.push(
+            nav_button(cx, c, "nav-gallery", "Gallery", |this| {
+                this.route = Route::Gallery;
+            })
+            .into_any_element(),
+        );
+    }
+    buttons.push(
+        if route == Route::Connections {
+            nav_button(cx, c, "new-connection", "New connection", |this| {
+                this.route = Route::ConnectionForm;
+            })
+        } else {
+            nav_button(cx, c, "back-connections", "Back", |this| {
+                this.route = Route::Connections;
+            })
+        }
+        .into_any_element(),
+    );
+    buttons
 }
 
 fn theme_toggle(

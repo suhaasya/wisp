@@ -13,6 +13,7 @@ mod memory;
 pub mod prelude;
 mod route;
 mod shell;
+pub mod components;
 pub mod theme;
 
 pub mod grid;

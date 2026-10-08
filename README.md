@@ -27,6 +27,14 @@ cargo test --workspace
 cargo run -p wisp
 ```
 
+Component gallery (debug / PR visual review, not shipped in release builds):
+
+```bash
+cargo run -p wisp --features ui-gallery
+```
+
+Then use **Gallery** in the title bar.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/ci.md](docs/ci.md) for CI and local checks.
 
 Release/dist profiles and size budgets: [docs/budgets.md](docs/budgets.md). Measure with
@@ -39,7 +47,8 @@ Release/dist profiles and size budgets: [docs/budgets.md](docs/budgets.md). Meas
 - **LUM-003** — CI pipeline (lint)
 - **LUM-004** — budget gates in CI
 - **LUM-005** — GPUI application shell
-- **LUM-006** — theme system and design tokens (current)
+- **LUM-006** — theme system and design tokens
+- **LUM-007** — internal UI component kit (current)
 
 ## License
 

@@ -6,6 +6,8 @@ pub enum Route {
     Connections,
     ConnectionForm,
     Workspace,
+    #[cfg(feature = "ui-gallery")]
+    Gallery,
 }
 
 impl Route {
@@ -14,6 +16,8 @@ impl Route {
             Self::Connections => "Connections",
             Self::ConnectionForm => "New connection",
             Self::Workspace => "Workspace",
+            #[cfg(feature = "ui-gallery")]
+            Self::Gallery => "Component gallery",
         }
     }
 }
