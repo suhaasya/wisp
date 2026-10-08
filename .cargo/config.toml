@@ -1,0 +1,6 @@
+# Local builds: warnings stay warnings. CI (LUM-003) should set:
+#   RUSTFLAGS="-D warnings"
+# and run the same commands as `scripts/ci-smoke.sh`.
+
+[alias]
+deny = "deny --all-features check"

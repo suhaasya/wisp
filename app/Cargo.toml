@@ -1,0 +1,19 @@
+[package]
+name = "wisp"
+description = "Wisp database client application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "wisp"
+path = "src/main.rs"
+
+[dependencies]
+wisp-store = { path = "../store" }
+wisp-ui = { path = "../ui" }

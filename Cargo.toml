@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "app",
+    "core",
+    "drivers",
+    "store",
+    "transport",
+    "ui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+# Shared third-party versions (add crates here as features land in later milestones).
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+tokio = { version = "1.43", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+# Pedantic subset: high-signal lints without enabling the full pedantic group.
+cloned_instead_of_copied = "warn"
+enum_glob_use = "warn"
+explicit_into_iter_loop = "warn"
+filter_map_next = "warn"
+flat_map_option = "warn"
+implicit_clone = "warn"
+inefficient_to_string = "warn"
+manual_let_else = "warn"
+map_unwrap_or = "warn"
+match_wildcard_for_single_variants = "warn"
+needless_continue = "warn"
+needless_for_each = "warn"
+ref_option_ref = "warn"
+semicolon_if_nothing_returned = "warn"
+trivially_copy_pass_by_ref = "warn"
+unused_self = "warn"
