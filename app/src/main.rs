@@ -1,6 +1,7 @@
 //! Wisp application entry point.
 
 mod bench;
+mod secrets;
 
 use std::{
     sync::{Arc, Mutex},
@@ -11,7 +12,8 @@ use clap::Parser;
 use wisp_store::{
     settings::{spawn_settings_watcher, SettingsStore, SettingsWatchEvent},
     window::WindowState,
-    AppearanceSettings, DensitySetting, MonoFontSetting, Settings, ThemeModeSetting, UiFontSetting,
+    AppearanceSettings, DensitySetting, MonoFontSetting, Settings, ThemeModeSetting,
+    UiFontSetting, WispPaths,
 };
 use wisp_ui::{
     AppearanceConfig, Density, LaunchConfig, MonoFontChoice, SettingsInbox, SettingsToast,
@@ -36,6 +38,8 @@ fn main() -> anyhow::Result<()> {
     {
         let _ = &*bench_stress::STRESS;
     }
+
+    let _secret_store = secrets::open_blocking_secret_store(&WispPaths::resolve())?;
 
     let store = Arc::new(Mutex::new(SettingsStore::load()));
     let stored = WindowState::load();

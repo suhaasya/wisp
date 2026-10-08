@@ -46,6 +46,9 @@ jobs:
       - name: theme literals
         run: cargo xtask ci theme-literals
 
+      - name: secret config
+        run: cargo xtask ci secret-config
+
       - name: clippy
         run: cargo xtask ci clippy
 
@@ -54,6 +57,44 @@ jobs:
 
       - name: audit
         run: cargo xtask ci audit
+
+  secrets:
+    name: secret storage (LUM-009)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            run: cargo test -p wisp-store
+            secret_backend: mock
+            keyring_it: ""
+          - os: macos-14
+            run: cargo test -p wisp-store --test keyring_integration
+            secret_backend: ""
+            keyring_it: "1"
+          - os: windows-latest
+            run: cargo test -p wisp-store
+            secret_backend: mock
+            keyring_it: ""
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: secrets-${{ matrix.os }}
+          save-if: true
+
+      - name: test
+        env:
+          WISP_SECRET_BACKEND: ${{ matrix.secret_backend }}
+          WISP_KEYRING_IT: ${{ matrix.keyring_it }}
+        run: ${{ matrix.run }}
 
   # Build matrix disabled temporarily — re-enable when ready for 5-target release CI (LUM-003).
   #

@@ -4,10 +4,15 @@
 //! drivers, transport, UI, or session orchestration in `wisp-core` (avoid cycles).
 
 pub mod paths;
+pub mod secrets;
 pub mod settings;
 pub mod window;
 
 pub use paths::WispPaths;
+pub use secrets::{
+    open_secret_store, BlockingSecretStore, ConnectionSecretPolicy, OpenSecretStoreOptions,
+    Secret, SecretBackendKind, SecretError, SecretKind, SecretStore, SharedSecretStore,
+};
 pub use settings::{
     parse_settings_toml, spawn_settings_watcher, AppearanceSettings, DensitySetting,
     GridSettings, KeybindingEntry, KeybindingsSettings, MonoFontSetting, ResultsSettings,

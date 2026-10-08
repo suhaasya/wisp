@@ -49,7 +49,8 @@ Release/dist profiles and size budgets: [docs/budgets.md](docs/budgets.md). Meas
 - **LUM-005** — GPUI application shell
 - **LUM-006** — theme system and design tokens
 - **LUM-007** — internal UI component kit
-- **LUM-008** — settings and config storage (current)
+- **LUM-008** — settings and config storage
+- **LUM-009** — secret storage (OS keychain)
 
 ## License
 

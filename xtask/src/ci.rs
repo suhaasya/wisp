@@ -32,6 +32,9 @@ pub enum CiCommands {
     /// Ensure colour literals exist only in `ui/src/theme/`.
     #[command(name = "theme-literals")]
     ThemeLiterals,
+    /// Ensure config dir has no plaintext secrets (LUM-009).
+    #[command(name = "secret-config")]
+    SecretConfig,
 }
 
 #[derive(Parser)]
@@ -61,6 +64,7 @@ impl CiCommands {
             Self::Audit => run_audit(),
             Self::Smoke => run_smoke(),
             Self::ThemeLiterals => run_theme_literals(),
+            Self::SecretConfig => run_secret_config(),
         }
     }
 }
@@ -160,6 +164,18 @@ fn run_audit() -> Result<()> {
         .context("failed to run cargo-audit")?;
     if !status.success() {
         bail!("cargo audit failed");
+    }
+    Ok(())
+}
+
+fn run_secret_config() -> Result<()> {
+    let root = workspace_root()?;
+    let script = root.join("scripts/check-no-secrets-in-config.sh");
+    let status = Command::new(script)
+        .status()
+        .context("failed to run check-no-secrets-in-config.sh")?;
+    if !status.success() {
+        bail!("secret config check failed");
     }
     Ok(())
 }

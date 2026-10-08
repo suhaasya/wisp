@@ -54,3 +54,14 @@ impl Default for WispPaths {
         Self::resolve()
     }
 }
+
+impl WispPaths {
+    /// Override directories (tests and isolated runs).
+    pub fn from_dirs(config_dir: PathBuf, data_dir: PathBuf, cache_dir: PathBuf) -> Self {
+        Self {
+            config_dir,
+            data_dir,
+            cache_dir,
+        }
+    }
+}
