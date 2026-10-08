@@ -2,7 +2,7 @@
 
 use gpui::Rgba;
 
-use crate::theme::rgb;
+use crate::theme::EnvColors;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Environment {
@@ -23,12 +23,21 @@ impl Environment {
         }
     }
 
-    pub fn color(self) -> Rgba {
+    pub fn color(self, env: &EnvColors) -> Rgba {
         match self {
-            Self::Local => rgb(0x3A9D5D),
-            Self::Dev => rgb(0x3B7DD8),
-            Self::Staging => rgb(0xC98516),
-            Self::Production => rgb(0xCF4136),
+            Self::Local => env.local,
+            Self::Dev => env.dev,
+            Self::Staging => env.staging,
+            Self::Production => env.production,
+        }
+    }
+
+    pub fn on_color(self, env: &EnvColors) -> Rgba {
+        match self {
+            Self::Local => env.on_local,
+            Self::Dev => env.on_dev,
+            Self::Staging => env.on_staging,
+            Self::Production => env.on_production,
         }
     }
 }

@@ -1,3 +1,6 @@
 //! Public UI surface for non-`wisp-ui` crates. Does **not** re-export GPUI types.
 
-pub use crate::{run, Environment, LaunchConfig, LaunchOutcome, Route, ShellMetrics, CRATE_MARKER};
+pub use crate::{
+    run, AppearanceConfig, Density, Environment, LaunchConfig, LaunchOutcome, MonoFontChoice,
+    Route, ShellMetrics, ThemeMode, UiFontChoice, CRATE_MARKER,
+};

@@ -29,6 +29,9 @@ pub enum CiCommands {
     Audit,
     /// Local smoke: fmt, clippy, tests, workspace debug build, deny, audit
     Smoke,
+    /// Ensure colour literals exist only in `ui/src/theme/`.
+    #[command(name = "theme-literals")]
+    ThemeLiterals,
 }
 
 #[derive(Parser)]
@@ -57,6 +60,7 @@ impl CiCommands {
             Self::Deny => run_deny(),
             Self::Audit => run_audit(),
             Self::Smoke => run_smoke(),
+            Self::ThemeLiterals => run_theme_literals(),
         }
     }
 }
@@ -156,6 +160,18 @@ fn run_audit() -> Result<()> {
         .context("failed to run cargo-audit")?;
     if !status.success() {
         bail!("cargo audit failed");
+    }
+    Ok(())
+}
+
+fn run_theme_literals() -> Result<()> {
+    let root = workspace_root()?;
+    let script = root.join("scripts/check-theme-literals.sh");
+    let status = Command::new(script)
+        .status()
+        .context("failed to run check-theme-literals.sh")?;
+    if !status.success() {
+        bail!("theme literal check failed");
     }
     Ok(())
 }

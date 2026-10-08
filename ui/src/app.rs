@@ -8,6 +8,7 @@ use crate::{
     launch::{LaunchConfig, LaunchOutcome, ShellMetrics, WindowPersistence},
     memory,
     shell::WispShell,
+    theme,
 };
 
 pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
@@ -15,11 +16,23 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
 
     let persistence = Rc::new(RefCell::new(config.window));
     let metrics = Rc::new(RefCell::new(ShellMetrics::default()));
+    let appearance = Rc::new(RefCell::new(config.appearance));
 
     application().run({
         let persistence = persistence.clone();
         let metrics = metrics.clone();
+        let appearance = appearance.clone();
         move |cx: &mut App| {
+            let prefs = appearance.borrow();
+            theme::init_global(
+                cx,
+                prefs.theme_mode,
+                prefs.density,
+                prefs.ui_font,
+                prefs.mono_font,
+            );
+            drop(prefs);
+
             let bounds = window_bounds_from_persistence(&persistence.borrow(), cx);
 
             cx.open_window(
@@ -35,8 +48,11 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
                 {
                     let persistence = persistence.clone();
                     let metrics = metrics.clone();
+                    let appearance = appearance.clone();
                     move |_, cx| {
-                        cx.new(move |_| WispShell::new(persistence.clone(), metrics.clone()))
+                        cx.new(move |_| {
+                            WispShell::new(persistence.clone(), metrics.clone(), appearance.clone())
+                        })
                     }
                 },
             )
@@ -48,8 +64,10 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
 
     let window = persistence.borrow().clone();
     let shell_metrics = metrics.borrow().clone();
+    let appearance = appearance.borrow().clone();
     Ok(LaunchOutcome {
         window,
+        appearance,
         metrics: shell_metrics,
     })
 }
@@ -57,10 +75,9 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
 fn window_bounds_from_persistence(state: &WindowPersistence, cx: &App) -> WindowBounds {
     let default_bounds = Bounds::centered(None, size(px(1080.0), px(780.0)), cx);
     if state.maximized {
-        let restore = state
-            .geometry
-            .map(|g| Bounds::new(point(px(g.x), px(g.y)), size(px(g.width), px(g.height))))
-            .unwrap_or(default_bounds);
+        let restore = state.geometry.map_or(default_bounds, |g| {
+            Bounds::new(point(px(g.x), px(g.y)), size(px(g.width), px(g.height)))
+        });
         return WindowBounds::Maximized(restore);
     }
     if let Some(g) = &state.geometry {

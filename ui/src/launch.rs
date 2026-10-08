@@ -15,8 +15,17 @@ pub struct WindowPersistence {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct AppearanceConfig {
+    pub theme_mode: crate::theme::ThemeMode,
+    pub density: crate::theme::Density,
+    pub ui_font: crate::theme::UiFontChoice,
+    pub mono_font: crate::theme::MonoFontChoice,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct LaunchConfig {
     pub window: WindowPersistence,
+    pub appearance: AppearanceConfig,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -27,5 +36,6 @@ pub struct ShellMetrics {
 #[derive(Debug, Clone)]
 pub struct LaunchOutcome {
     pub window: WindowPersistence,
+    pub appearance: AppearanceConfig,
     pub metrics: ShellMetrics,
 }

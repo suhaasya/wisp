@@ -13,14 +13,17 @@ mod memory;
 pub mod prelude;
 mod route;
 mod shell;
-mod theme;
+pub mod theme;
 
 pub mod grid;
 pub mod render;
 
 pub use environment::Environment;
-pub use launch::{LaunchConfig, LaunchOutcome, ShellMetrics, WindowGeometry, WindowPersistence};
+pub use launch::{
+    AppearanceConfig, LaunchConfig, LaunchOutcome, ShellMetrics, WindowGeometry, WindowPersistence,
+};
 pub use route::Route;
+pub use theme::{Density, MonoFontChoice, ThemeMode, UiFontChoice};
 /// Placeholder until GPUI integration lands in LUM-005.
 pub const CRATE_MARKER: &str = "wisp-ui";
 

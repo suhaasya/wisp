@@ -43,6 +43,9 @@ jobs:
       - name: fmt
         run: cargo xtask ci fmt
 
+      - name: theme literals
+        run: cargo xtask ci theme-literals
+
       - name: clippy
         run: cargo xtask ci clippy
 
