@@ -2,6 +2,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use wisp_core::DbBridge;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WindowGeometry {
     pub width: f32,
@@ -43,6 +45,8 @@ pub struct LaunchConfig {
     pub window: WindowPersistence,
     pub appearance: AppearanceConfig,
     pub settings_inbox: Option<SharedSettingsInbox>,
+    /// Tokio bridge for DB/network work (LUM-010).
+    pub db_bridge: Option<Arc<DbBridge>>,
 }
 
 #[derive(Debug, Clone, Default)]

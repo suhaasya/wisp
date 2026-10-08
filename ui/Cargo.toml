@@ -21,4 +21,5 @@ gpui_platform.workspace = true
 serde = { workspace = true, features = ["derive"] }
 sysinfo = "0.33"
 unicode-segmentation = "1.12"
+tokio-util.workspace = true
 wisp-core = { path = "../core", version = "0.1.0" }

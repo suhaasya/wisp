@@ -9,6 +9,7 @@ use std::{
 };
 
 use clap::Parser;
+use wisp_core::{DbBridge, DbRuntimeConfig};
 use wisp_store::{
     settings::{spawn_settings_watcher, SettingsStore, SettingsWatchEvent},
     window::WindowState,
@@ -40,6 +41,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let _secret_store = secrets::open_blocking_secret_store(&WispPaths::resolve())?;
+    let db_bridge = Arc::new(DbBridge::start(DbRuntimeConfig::default()));
 
     let store = Arc::new(Mutex::new(SettingsStore::load()));
     let stored = WindowState::load();
@@ -63,6 +65,7 @@ fn main() -> anyhow::Result<()> {
         },
         appearance,
         settings_inbox: Some(settings_inbox.clone()),
+        db_bridge: Some(db_bridge),
     };
 
     let outcome = wisp_ui::run(config)?;

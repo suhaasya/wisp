@@ -7,6 +7,7 @@
 //! GPUI is confined to this crate — downstream code uses [`prelude`] and [`run`].
 
 mod app;
+pub mod bridge;
 mod environment;
 mod launch;
 mod memory;

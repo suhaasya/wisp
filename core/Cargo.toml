@@ -11,5 +11,9 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+crossbeam-channel.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
 wisp-drivers = { path = "../drivers", version = "0.1.0" }
 wisp-store = { path = "../store", version = "0.1.0" }

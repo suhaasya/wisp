@@ -19,13 +19,19 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
     let metrics = Rc::new(RefCell::new(ShellMetrics::default()));
     let appearance = Rc::new(RefCell::new(config.appearance));
     let settings_inbox = config.settings_inbox.clone();
+    let db_bridge = config.db_bridge.clone();
 
     application().run({
         let persistence = persistence.clone();
         let metrics = metrics.clone();
         let appearance = appearance.clone();
         let settings_inbox = settings_inbox.clone();
+        let db_bridge = db_bridge.clone();
         move |cx: &mut App| {
+            if let Some(bridge) = db_bridge.clone() {
+                crate::bridge::init_db_bridge(cx, bridge);
+            }
+
             let prefs = appearance.borrow();
             theme::init_global(
                 cx,
