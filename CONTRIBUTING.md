@@ -41,8 +41,8 @@ Individual commands:
 cargo xtask ci fmt
 cargo xtask ci clippy
 cargo xtask ci test
-cargo xtask ci deny    # cargo install cargo-deny --version 0.18.3 --locked
-cargo xtask ci audit   # cargo install cargo-audit --version 0.22.1 --locked
+cargo xtask ci deny    # cargo install cargo-deny --version 0.20.2 --locked
+cargo xtask ci audit   # cargo install cargo-audit --version 0.22.2 --locked
 ```
 
 Release size baseline ([docs/budgets.md](docs/budgets.md)):

@@ -19,7 +19,7 @@ Dependency flow: `app → ui → core → drivers → transport`, with `store` u
 
 ## Getting started
 
-Requires the pinned toolchain in `rust-toolchain.toml` (Rust 1.85 + rustfmt + clippy).
+Requires the pinned toolchain in `rust-toolchain.toml` (Rust 1.88 + rustfmt + clippy).
 
 ```bash
 cargo build --workspace

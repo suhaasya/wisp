@@ -151,6 +151,7 @@ fn run_audit() -> Result<()> {
     ensure_cargo_plugin("audit")?;
     let root = workspace_root()?;
     let status = cargo_plugin_command(&root, "audit")?
+        .arg("audit")
         .status()
         .context("failed to run cargo-audit")?;
     if !status.success() {

@@ -11,4 +11,4 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-wisp-core = { path = "../core" }
+wisp-core = { path = "../core", version = "0.1.0" }

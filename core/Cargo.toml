@@ -11,5 +11,5 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-wisp-drivers = { path = "../drivers" }
-wisp-store = { path = "../store" }
+wisp-drivers = { path = "../drivers", version = "0.1.0" }
+wisp-store = { path = "../store", version = "0.1.0" }

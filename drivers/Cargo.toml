@@ -11,4 +11,4 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-wisp-transport = { path = "../transport" }
+wisp-transport = { path = "../transport", version = "0.1.0" }

@@ -23,7 +23,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.88.0
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
@@ -33,7 +33,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-deny@0.18.3,cargo-audit@0.22.1
+          tool: cargo-deny@0.20.2,cargo-audit@0.22.2
 
       - name: Verify supply-chain tools on PATH
         run: |
@@ -81,7 +81,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.88.0
           components: rustfmt, clippy
 
       - name: GPUI / platform deps (Linux)
