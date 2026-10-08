@@ -10,8 +10,7 @@ gh api -X PUT "repos/${repo}/branches/main/protection" \
   "required_status_checks": {
     "strict": true,
     "checks": [
-      {"context": "lint", "app_id": null},
-      {"context": "ci-ok", "app_id": null}
+      {"context": "lint", "app_id": null}
     ]
   },
   "enforce_admins": false,

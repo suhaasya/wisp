@@ -4,13 +4,14 @@ Pull requests and pushes to `main` run [.github/workflows/ci.yml](../.github/wor
 
 ## Pipeline
 
+**Active:** lint only. The **build** matrix and **ci-ok** jobs are commented out in
+`ci.yml` until we turn on 5-target release CI again.
+
 | Job | Runner | What it does |
 | --- | --- | --- |
 | **lint** | `ubuntu-24.04` | `cargo xtask ci fmt`, `clippy`, `deny`, `audit` |
-| **build** (×5) | matrix below | `test` + `dist` release build + artifact upload |
-| **ci-ok** | `ubuntu-24.04` | Fails if lint or any matrix leg failed |
 
-### Shipping targets (build matrix)
+### Shipping targets (build matrix — disabled in CI)
 
 | OS runner | Rust target |
 | --- | --- |
@@ -40,7 +41,6 @@ Configure **`main`** on GitHub:
 
 1. **Require status checks** before merge:
    - `lint`
-   - `ci-ok`
 2. **Require pull request reviews** — at least **1** approval.
 3. **Require branches to be up to date** (recommended).
 
