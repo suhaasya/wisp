@@ -4,6 +4,9 @@
 //! [`wisp_core`] only among Wisp crates. Must not depend on drivers, transport, store,
 //! or the application binary directly.
 
+pub mod grid;
+pub mod render;
+
 /// Placeholder until GPUI integration lands in LUM-005.
 pub const CRATE_MARKER: &str = "wisp-ui";
 

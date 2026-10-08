@@ -1,5 +1,4 @@
-# cargo-deny configuration (run locally: cargo deny check)
-# CI wiring lands in LUM-003.
+# cargo-deny configuration (local: cargo deny check; CI: cargo xtask ci deny).
 
 [advisories]
 version = 2

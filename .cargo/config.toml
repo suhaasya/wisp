@@ -4,3 +4,4 @@
 
 [alias]
 deny = "deny --all-features check"
+xtask = "run --package xtask --"

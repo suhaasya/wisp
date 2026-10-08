@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lint
+          save-if: true
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.18.3,cargo-audit@0.22.1
+
+      - name: fmt
+        run: cargo xtask ci fmt
+
+      - name: clippy
+        run: cargo xtask ci clippy
+
+      - name: deny
+        run: cargo xtask ci deny
+
+      - name: audit
+        run: cargo xtask ci audit
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            cross: false
+          - os: macos-14
+            target: x86_64-apple-darwin
+            cross: true
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            cross: false
+          - os: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            cross: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+          components: rustfmt, clippy
+
+      - name: GPUI / platform deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            libasound2-dev \
+            libfontconfig1-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libvulkan-dev \
+            pkg-config \
+            qemu-user-static
+
+      - name: Cross linkers (Linux aarch64)
+        if: runner.os == 'Linux' && matrix.cross
+        run: |
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-aarch64-static" >> "$GITHUB_ENV"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: build-${{ matrix.target }}
+          save-if: true
+
+      - name: rustup target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: test
+        run: cargo xtask ci test --target ${{ matrix.target }}
+
+      - name: release build
+        run: cargo xtask ci build-release --target ${{ matrix.target }} --profile dist
+
+      - name: artifact path
+        id: artifact
+        shell: bash
+        run: echo "path=$(cargo xtask ci artifact-path --target ${{ matrix.target }} --profile dist)" >> "$GITHUB_OUTPUT"
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wisp-${{ matrix.target }}
+          path: ${{ steps.artifact.outputs.path }}
+          if-no-files-found: error
+
+  ci-ok:
+    name: ci-ok
+    needs: [lint, build]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: require green lint and matrix
+        shell: bash
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" || "${{ needs.build.result }}" != "success" ]]; then
+            echo "lint: ${{ needs.lint.result }}, build: ${{ needs.build.result }}"
+            exit 1
+          fi

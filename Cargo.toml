@@ -7,6 +7,15 @@ members = [
     "store",
     "transport",
     "ui",
+    "xtask",
+]
+default-members = [
+    "app",
+    "core",
+    "drivers",
+    "store",
+    "transport",
+    "ui",
 ]
 
 [workspace.package]
@@ -23,6 +32,26 @@ serde = { version = "1.0", features = ["derive"] }
 thiserror = "2.0"
 tokio = { version = "1.43", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
+clap = { version = "4.5", features = ["derive"] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "s"
+panic = "abort"
+strip = true
+
+# Hot paths: grid and render code in ui/core stay fully optimized while the rest sizes down.
+[profile.release.package.wisp-core]
+opt-level = 3
+
+[profile.release.package.wisp-ui]
+opt-level = 3
+
+[profile.dist]
+inherits = "release"
+debug = false
+incremental = false
 
 [workspace.lints.rust]
 unsafe_code = "deny"

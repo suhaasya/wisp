@@ -27,13 +27,17 @@ cargo test --workspace
 cargo run -p wisp
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for lint policy, `cargo-deny`, and CI smoke checks.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/ci.md](docs/ci.md) for CI and local checks.
+
+Release/dist profiles and size budgets: [docs/budgets.md](docs/budgets.md). Measure with
+`cargo xtask size` (requires [cargo-bloat](https://github.com/RazrFalcon/cargo-bloat)).
 
 ## Status
 
-- **LUM-001** — workspace skeleton (current)
+- **LUM-001** — workspace skeleton
+- **LUM-002** — release/dist profiles and size baseline
+- **LUM-003** — CI pipeline (current)
 - **LUM-005** — GPUI hello window
-- **LUM-003** — CI pipeline
 
 ## License
 

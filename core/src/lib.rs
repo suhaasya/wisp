@@ -4,6 +4,9 @@
 //! May depend on [`wisp_drivers`] and [`wisp_store`]. Must not depend on UI or the
 //! binary crate.
 
+pub mod grid;
+pub mod render;
+
 /// Placeholder until core session logic lands in later milestones.
 pub const CRATE_MARKER: &str = "wisp-core";
 

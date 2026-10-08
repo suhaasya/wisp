@@ -29,30 +29,36 @@ rustup show active-toolchain
 
 ## Local checks
 
-```bash
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets
-cargo build --workspace
-cargo test --workspace
-```
-
-Optional (install [cargo-deny](https://github.com/EmbarkStudios/cargo-deny)):
+CI runs the same steps via **xtask** (see [docs/ci.md](docs/ci.md)):
 
 ```bash
-cargo deny check
+cargo xtask ci smoke
 ```
 
-## CI-style smoke (warnings denied)
-
-Use the same flags CI will use (LUM-003):
+Individual commands:
 
 ```bash
-./scripts/ci-smoke.sh
+cargo xtask ci fmt
+cargo xtask ci clippy
+cargo xtask ci test
+cargo xtask ci deny    # cargo install cargo-deny --version 0.18.3 --locked
+cargo xtask ci audit   # cargo install cargo-audit --version 0.22.1 --locked
 ```
 
-That sets `RUSTFLAGS="-D warnings"` for build, clippy, and test.
+Release size baseline ([docs/budgets.md](docs/budgets.md)):
 
-## Windows / Linux / macOS
+```bash
+cargo install cargo-bloat --version 0.11.1 --locked
+# cargo-llvm-lines needs Rust ≥ 1.89; optional until toolchain bump:
+# cargo install cargo-llvm-lines
+cargo xtask size
+cargo xtask size --profile dist
+```
 
-Run `./scripts/ci-smoke.sh` (or the individual `cargo` commands above) on each OS before
-opening a PR that touches build or platform code.
+When adding third-party crates, prefer `default-features = false` and enable only what Wisp needs.
+Do not set `-C target-cpu=…` for shipped release/dist builds (local benchmarks only).
+
+## CI
+
+GitHub Actions builds all five shipping targets on every PR. `./scripts/ci-smoke.sh` wraps
+`cargo xtask ci smoke`. Repo admins enable branch protection with `./scripts/configure-branch-protection.sh`.
