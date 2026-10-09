@@ -10,6 +10,7 @@ mod app;
 pub mod bridge;
 pub mod connections;
 mod environment;
+mod journal;
 mod launch;
 mod memory;
 mod multi_window;
@@ -22,11 +23,13 @@ pub mod workspace;
 
 pub mod grid;
 pub mod render;
+pub mod sql_editor;
 
 pub use environment::Environment;
 pub use launch::{
-    AppearanceConfig, LaunchConfig, LaunchOutcome, SettingsInbox, SettingsToast, SharedSettingsInbox,
-    ShellMetrics, WindowGeometry, WindowPersistence,
+    AppearanceConfig, JournalShutdownRegistry, LaunchConfig, LaunchOutcome, PendingJournal,
+    SettingsInbox, SettingsToast, SharedSettingsInbox, ShellMetrics, WindowGeometry,
+    WindowPersistence,
 };
 pub use multi_window::WindowOpenQueue;
 pub use route::Route;

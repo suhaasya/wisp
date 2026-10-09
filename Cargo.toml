@@ -65,6 +65,10 @@ tracing = "0.1"
 clap = { version = "4.5", features = ["derive"] }
 serde_json = "1.0"
 rpassword = "7.3"
+ropey = "1.6"
+tree-sitter = "0.25.8"
+tree-sitter-highlight = "0.25.8"
+tree-sitter-sequel = "0.3.11"
 
 gpui = { git = "https://github.com/zed-industries/zed", rev = "dc3fb21676457b84d2233ac4c6bec5cebc698ec3" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "dc3fb21676457b84d2233ac4c6bec5cebc698ec3", features = [

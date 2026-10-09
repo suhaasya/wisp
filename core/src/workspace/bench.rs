@@ -4,8 +4,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::pager::{
-    FetchStrategy, PagerConfig, QueryableSequentialSource, ResultPager, SequentialPageSource,
-    Viewport,
+    FetchStrategy, GridBrowseSource, PagerConfig, QueryableSequentialSource, ResultPager,
+    SequentialPageSource, Viewport,
 };
 use crate::query::TableDataQuery;
 
@@ -19,11 +19,12 @@ pub struct Tabs20BenchResult {
 /// Simulates 20 table tabs: load viewport on tab 0, evict pages on the other 19.
 pub fn bench_tabs_20() -> Tabs20BenchResult {
     const TABS: u32 = 20;
-    let mut pagers: Vec<Rc<RefCell<ResultPager<QueryableSequentialSource>>>> = Vec::new();
+    let mut pagers: Vec<Rc<RefCell<ResultPager<GridBrowseSource>>>> = Vec::new();
     for i in 0..TABS {
         let query = TableDataQuery::for_table(format!("bench_t{i}"));
         let inner = SequentialPageSource::new(50_000, 9);
-        let source = QueryableSequentialSource::new(inner, query);
+        let source =
+            GridBrowseSource::Sequential(QueryableSequentialSource::new(inner, query));
         let pager = ResultPager::new(source, FetchStrategy::Offset, PagerConfig::default())
             .expect("pager");
         pagers.push(Rc::new(RefCell::new(pager)));

@@ -24,6 +24,15 @@ impl GridSelection {
         Self::Range { start, end }
     }
 
+    pub fn primary_row(&self) -> Option<u64> {
+        match self {
+            Self::None => None,
+            Self::Cell(c) => Some(c.row),
+            Self::Row(r) => Some(*r),
+            Self::Range { start, .. } => Some(start.row),
+        }
+    }
+
     pub fn contains(&self, row: u64, col: usize) -> bool {
         match self {
             Self::None => false,

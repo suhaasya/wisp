@@ -5,10 +5,14 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Task, Window, WindowBounds,
 };
 use wisp_core::{
-    bridge::DbEventPayload, ConnectionHub, DbCommandPayload, SessionOpenSpec, SessionPhase,
-    WorkspaceSessionStore,
+    bridge::DbEventPayload, discard_pending, ConnectionHub, DbCommandPayload, JournalWriter,
+    SessionOpenSpec, SessionPhase, WispPaths, WorkspaceSessionStore,
 };
 
+use crate::components::overlay::{modal_centered, modal_panel};
+use crate::launch::{JournalShutdownRegistry, PendingJournal};
+
+use crate::components::button::{button, ButtonVariant};
 use crate::connections::{
     ConnectionForm, ConnectionManager, ShellCommand, ShellCommandSender,
 };
@@ -47,13 +51,23 @@ pub struct WispShell {
     connections_hub: Option<Arc<ConnectionHub>>,
     active_connection: Option<wisp_core::ConnectionId>,
     session_open_task: Option<Task<()>>,
+    schema_fetch_task: Option<Task<()>>,
     connection_manager: Option<Entity<ConnectionManager>>,
     connection_form: Option<Entity<ConnectionForm>>,
     workspace: Option<Entity<WorkspaceView>>,
     workspace_sessions: Arc<Mutex<WorkspaceSessionStore>>,
     window_open_queue: WindowOpenQueue,
+    journal: JournalWriter,
+    journal_restore: Option<JournalRestorePrompt>,
     #[cfg(feature = "ui-gallery")]
     gallery: Entity<ComponentGallery>,
+}
+
+#[derive(Clone)]
+struct JournalRestorePrompt {
+    paths: Vec<std::path::PathBuf>,
+    workspace: wisp_core::JournalWorkspace,
+    tab_count: usize,
 }
 
 impl WispShell {
@@ -66,9 +80,23 @@ impl WispShell {
         workspace_sessions: Arc<Mutex<WorkspaceSessionStore>>,
         window_open_queue: WindowOpenQueue,
         initial_connection: Option<wisp_core::ConnectionId>,
+        pending_journals: Vec<PendingJournal>,
+        journal_shutdown: JournalShutdownRegistry,
         #[cfg(feature = "ui-gallery")] gallery: Entity<ComponentGallery>,
         cx: &mut Context<Self>,
     ) -> Self {
+        let paths = WispPaths::resolve();
+        let journal = JournalWriter::spawn_for_window(&paths);
+        if let Ok(mut reg) = journal_shutdown.lock() {
+            reg.push(journal.clone());
+        }
+        let journal_restore = pending_journals.first().and_then(|pending| {
+            pending.doc.workspace.clone().map(|workspace| JournalRestorePrompt {
+                paths: pending_journals.iter().map(|p| p.path.clone()).collect(),
+                tab_count: workspace.tabs.len(),
+                workspace,
+            })
+        });
         let connection_commands = ShellCommandSender::default();
         let connection_manager = connections.as_ref().map(|hub| {
             let commands = connection_commands.clone();
@@ -79,8 +107,12 @@ impl WispShell {
             cx.new(|cx| ConnectionForm::new(cx, hub, commands))
         });
         let workspace = connections.clone().map(|hub| {
+            let journal_clone = journal.clone();
             cx.new(|cx| {
-                WorkspaceView::new(cx, Arc::clone(&hub), Arc::clone(&workspace_sessions))
+                let mut view =
+                    WorkspaceView::new(cx, Arc::clone(&hub), Arc::clone(&workspace_sessions));
+                view.attach_journal(journal_clone);
+                view
             })
         });
         let mut shell = Self {
@@ -103,11 +135,14 @@ impl WispShell {
             connections_hub: connections.clone(),
             active_connection: None,
             session_open_task: None,
+            schema_fetch_task: None,
             connection_manager,
             connection_form,
             workspace,
             workspace_sessions,
             window_open_queue,
+            journal,
+            journal_restore,
             #[cfg(feature = "ui-gallery")]
             gallery,
         };
@@ -115,6 +150,32 @@ impl WispShell {
             shell.open_session(id, cx);
         }
         shell
+    }
+
+    fn accept_journal_restore(&mut self, cx: &mut Context<Self>) {
+        let Some(prompt) = self.journal_restore.take() else {
+            return;
+        };
+        let connection_id = wisp_core::ConnectionId(prompt.workspace.connection_id);
+        let _ = discard_pending(&prompt.paths);
+        if let Some(ws) = self.workspace.clone() {
+            ws.update(cx, |view, _| {
+                view.set_pending_journal_restore(Some(prompt.workspace));
+            });
+        }
+        self.route = Route::Workspace;
+        self.open_session(connection_id, cx);
+        cx.notify();
+    }
+
+    fn dismiss_journal_restore(&mut self, cx: &mut Context<Self>) {
+        if let Some(prompt) = self.journal_restore.take() {
+            let _ = discard_pending(&prompt.paths);
+        }
+        if let Some(ws) = self.workspace.clone() {
+            ws.update(cx, |view, _| view.set_pending_journal_restore(None));
+        }
+        cx.notify();
     }
 
     fn drain_connection_commands(&mut self, cx: &mut Context<Self>) {
@@ -246,6 +307,51 @@ impl WispShell {
         self.session_open_task = Some(task);
     }
 
+    fn fetch_schema_catalog(&mut self, id: wisp_core::ConnectionId, cx: &mut Context<Self>) {
+        self.timing_status = "Loading schema…".into();
+        let bridge = crate::bridge::db_bridge(cx);
+        let workspace = self.workspace.clone();
+        let (_id, _cancel, task) = crate::bridge::spawn_db(
+            cx,
+            &bridge,
+            DbCommandPayload::SessionFetchSchemaCatalog(id),
+            move |this, cx, result| {
+                this.schema_fetch_task = None;
+                match result {
+                    Ok(DbEventPayload::SessionSchemaCatalog(Ok(load))) => {
+                        if this.active_connection == Some(id) {
+                            if let Some(ws) = workspace.as_ref() {
+                                ws.update(cx, |view, cx| view.apply_schema_catalog(load, cx));
+                            }
+                            this.timing_status = "Schema loaded".into();
+                        }
+                    }
+                    Ok(DbEventPayload::SessionSchemaCatalog(Err(err))) => {
+                        if this.active_connection == Some(id) {
+                            let msg = format!("{err}");
+                            this.timing_status = format!("Schema load failed — {msg}").into();
+                            if let Some(ws) = workspace.as_ref() {
+                                ws.update(cx, |view, cx| view.set_schema_load_failed(msg, cx));
+                            }
+                        }
+                    }
+                    Ok(_) | Err(_) => {
+                        if this.active_connection == Some(id) {
+                            this.timing_status = "Schema load failed".into();
+                            if let Some(ws) = workspace.as_ref() {
+                                ws.update(cx, |view, cx| {
+                                    view.set_schema_load_failed("unexpected bridge response", cx)
+                                });
+                            }
+                        }
+                    }
+                }
+                cx.notify();
+            },
+        );
+        self.schema_fetch_task = Some(task);
+    }
+
     fn apply_session_snapshot(
         &mut self,
         snap: wisp_core::SessionSnapshot,
@@ -259,7 +365,14 @@ impl WispShell {
         self.timing_status = version.into();
         if let Some(id) = self.active_connection {
             if let Some(workspace) = self.workspace.clone() {
-                workspace.update(cx, |ws, cx| ws.set_connection(id, cx));
+                workspace.update(cx, |ws, cx| {
+                    if ws.connection_id() != Some(id) {
+                        ws.set_connection(id, cx);
+                    }
+                });
+            }
+            if self.schema_fetch_task.is_none() {
+                self.fetch_schema_catalog(id, cx);
             }
         }
     }
@@ -366,7 +479,61 @@ impl Render for WispShell {
             .children(self.settings_toast.as_ref().map(|message| {
                 toast::toast(&theme, message.clone())
             }))
+            .children(self.journal_restore.as_ref().map(|prompt| {
+                journal_restore_modal(&theme, prompt.tab_count, cx)
+            }))
     }
+}
+
+fn journal_restore_modal(
+    theme: &ResolvedTheme,
+    tab_count: usize,
+    cx: &mut Context<WispShell>,
+) -> impl IntoElement {
+    let summary = if tab_count == 0 {
+        "Recover unsaved workspace state from the last session?".to_string()
+    } else {
+        format!(
+            "Recover unsaved workspace state ({tab_count} open tab{}) from the last session?",
+            if tab_count == 1 { "" } else { "s" }
+        )
+    };
+    let focus = cx.focus_handle();
+    modal_centered(modal_panel(
+        theme,
+        "Recover unsaved work?",
+        &focus,
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(div().text_sm().child(summary))
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap_2()
+                    .child(button(
+                        cx,
+                        "journal-dismiss",
+                        "Discard",
+                        ButtonVariant::Default,
+                        theme,
+                        |this, _, cx| this.dismiss_journal_restore(cx),
+                    ))
+                    .child(button(
+                        cx,
+                        "journal-restore",
+                        "Restore",
+                        ButtonVariant::Primary,
+                        theme,
+                        |this, _, cx| this.accept_journal_restore(cx),
+                    )),
+            ),
+        crate::components::overlay::overlay_close(cx, theme, |this, _, cx| {
+            this.dismiss_journal_restore(cx);
+        }),
+    ))
 }
 
 #[allow(unused_variables)]

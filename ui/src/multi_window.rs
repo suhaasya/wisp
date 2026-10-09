@@ -7,7 +7,10 @@ use std::sync::{Arc, Mutex};
 use gpui::{BorrowAppContext, Global};
 use wisp_core::{ConnectionHub, ConnectionId, WorkspaceSessionStore};
 
-use crate::launch::{AppearanceConfig, SharedSettingsInbox, ShellMetrics, WindowPersistence};
+use crate::launch::{
+    AppearanceConfig, JournalShutdownRegistry, PendingJournal, SharedSettingsInbox, ShellMetrics,
+    WindowPersistence,
+};
 
 #[derive(Clone, Debug)]
 pub struct SecondaryWindowRequest {
@@ -41,6 +44,8 @@ pub struct ShellBoot {
     pub connections: Option<Arc<ConnectionHub>>,
     pub workspace_sessions: Arc<Mutex<WorkspaceSessionStore>>,
     pub window_open_queue: WindowOpenQueue,
+    pub pending_journals: Vec<PendingJournal>,
+    pub journal_shutdown: JournalShutdownRegistry,
 }
 
 #[derive(Clone)]
@@ -61,6 +66,6 @@ pub fn drain_pending_windows(cx: &mut gpui::App) {
     for (i, req) in pending.into_iter().enumerate() {
         let offset = 40.0 * (i as f32 + 1.0);
         let bounds = crate::app::offset_window_bounds(&boot.persistence.borrow(), offset, cx);
-        crate::app::open_shell_window(cx, &boot, bounds, Some(req.connection_id));
+        crate::app::open_shell_window(cx, &boot, bounds, Some(req.connection_id), Vec::new());
     }
 }

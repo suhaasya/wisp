@@ -18,7 +18,7 @@ use std::sync::Arc;
 use crate::{
     connections::run_connection_test,
     error::WispError,
-    session::{SessionManager, SessionRuntimeConfig},
+    session::{SessionError, SessionManager, SessionRuntimeConfig},
 };
 
 /// Tokio pool sizing (each worker uses ~2 MB stack; see PRD budget note).
@@ -188,9 +188,67 @@ async fn execute(
             let result = SessionManager::execute(&sessions, id, &sql, write_approved).await;
             Ok(DbEventPayload::SessionExecute(result))
         }
+        DbCommandPayload::SessionCommitTransaction {
+            id,
+            statements,
+            write_approved,
+        } => {
+            let result =
+                SessionManager::commit_transaction(&sessions, id, statements, write_approved)
+                    .await;
+            Ok(DbEventPayload::SessionCommitTransaction(result))
+        }
         DbCommandPayload::SessionSnapshot(id) => {
             let snap = SessionManager::snapshot(&sessions, id).await;
             Ok(DbEventPayload::SessionSnapshot(snap))
+        }
+        DbCommandPayload::SessionRunScript {
+            id,
+            statements,
+            write_approved,
+        } => {
+            let sessions_for_cancel = Arc::clone(&sessions);
+            tokio::select! {
+                () = cancel.cancelled() => {
+                    SessionManager::cancel_in_flight_query(&sessions_for_cancel, id);
+                    Err(WispError::cancelled())
+                }
+                result = SessionManager::run_script(&sessions, id, statements, write_approved, cancel.clone()) => {
+                    Ok(DbEventPayload::SessionRunScript(result))
+                }
+            }
+        }
+        DbCommandPayload::SessionQueryPage {
+            id,
+            sql,
+            offset,
+            limit,
+        } => {
+            let sessions = Arc::clone(&sessions);
+            let page = tokio::task::spawn_blocking(move || {
+                SessionManager::query_page_blocking(&sessions, id, &sql, offset, limit)
+            })
+            .await
+            .map_err(|e| WispError::internal("query page task failed", &e.to_string()))?;
+            let snapshot = page.map(|p| crate::session::QueryPageSnapshot::from_page(&p));
+            Ok(DbEventPayload::SessionQueryPage(snapshot))
+        }
+        DbCommandPayload::SessionCancelQuery(id) => {
+            SessionManager::cancel_in_flight_query(&sessions, id);
+            Ok(DbEventPayload::SessionCancelQuery)
+        }
+        DbCommandPayload::SessionFetchSchemaCatalog(id) => {
+            let _ = SessionManager::ensure_metadata(&sessions, id, runtime.clone()).await;
+            let sessions = Arc::clone(&sessions);
+            let result = match tokio::task::spawn_blocking(move || {
+                SessionManager::fetch_schema_catalog_blocking(&sessions, id)
+            })
+            .await
+            {
+                Ok(inner) => inner,
+                Err(e) => Err(SessionError::Connect(e.to_string())),
+            };
+            Ok(DbEventPayload::SessionSchemaCatalog(result))
         }
         DbCommandPayload::ShutdownAllSessions => {
             SessionManager::shutdown_all(&sessions).await;

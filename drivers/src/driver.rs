@@ -90,6 +90,11 @@ pub trait DbDriver: Send {
 
     fn cancel(&mut self, query: QueryId) -> Result<(), DriverError>;
 
+    /// Active paged query handle, if any (for session cancel).
+    fn in_flight_query(&self) -> Option<QueryId> {
+        None
+    }
+
     fn begin(&mut self) -> Result<(), DriverError>;
 
     fn commit(&mut self) -> Result<(), DriverError>;

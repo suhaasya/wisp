@@ -55,6 +55,26 @@ impl WispPaths {
     pub fn ssh_known_hosts(&self) -> PathBuf {
         self.data_dir.join("ssh/known_hosts")
     }
+
+    pub fn query_history_dir(&self) -> PathBuf {
+        self.data_dir.join("history")
+    }
+
+    pub fn query_history_jsonl(&self, id: crate::ConnectionId) -> PathBuf {
+        self.query_history_dir().join(format!("{}.jsonl", id.0))
+    }
+
+    pub fn snippets_toml(&self) -> PathBuf {
+        self.data_dir.join("snippets.toml")
+    }
+
+    pub fn journal_dir(&self) -> PathBuf {
+        self.data_dir.join("journal")
+    }
+
+    pub fn journal_file(&self, window_id: uuid::Uuid) -> PathBuf {
+        self.journal_dir().join(format!("{window_id}.json"))
+    }
 }
 
 impl Default for WispPaths {

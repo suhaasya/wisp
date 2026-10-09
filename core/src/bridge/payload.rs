@@ -2,7 +2,11 @@
 
 use super::RequestId;
 use crate::{
-    session::{SessionError, SessionOpenSpec, SessionSnapshot},
+    schema::SchemaLoadResult,
+    session::{
+        CommitTransactionOutcome, QueryPageSnapshot, RunScriptReport, ScriptStatement,
+        SessionError, SessionOpenSpec, SessionSnapshot,
+    },
     ConnectionTestError, ConnectionTestOutcome, ConnectionTestSpec, WispError,
 };
 use wisp_drivers::ExecuteStats;
@@ -27,8 +31,31 @@ pub enum DbCommandPayload {
         sql: String,
         write_approved: bool,
     },
+    /// Staged grid commit (LUM-029): one transaction, full rollback on failure.
+    SessionCommitTransaction {
+        id: ConnectionId,
+        statements: Vec<String>,
+        write_approved: bool,
+    },
     /// Query session state for the status bar.
     SessionSnapshot(ConnectionId),
+    /// Run a script (multi-statement) on an open session (LUM-033).
+    SessionRunScript {
+        id: ConnectionId,
+        statements: Vec<ScriptStatement>,
+        write_approved: bool,
+    },
+    /// Fetch one page of a prior SELECT (LUM-033).
+    SessionQueryPage {
+        id: ConnectionId,
+        sql: String,
+        offset: u64,
+        limit: u32,
+    },
+    /// Cancel the in-flight query on a session (LUM-033).
+    SessionCancelQuery(ConnectionId),
+    /// Load schema catalog via metadata connection (LUM-021).
+    SessionFetchSchemaCatalog(ConnectionId),
     /// Close every live session (app quit).
     ShutdownAllSessions,
 }
@@ -42,7 +69,12 @@ pub enum DbEventPayload {
     SessionOpen(Result<SessionSnapshot, SessionError>),
     SessionClose,
     SessionExecute(Result<ExecuteStats, SessionError>),
+    SessionCommitTransaction(Result<CommitTransactionOutcome, SessionError>),
     SessionSnapshot(Option<SessionSnapshot>),
+    SessionRunScript(Result<RunScriptReport, SessionError>),
+    SessionQueryPage(Result<QueryPageSnapshot, SessionError>),
+    SessionCancelQuery,
+    SessionSchemaCatalog(Result<SchemaLoadResult, SessionError>),
     ShutdownAllSessions,
 }
 

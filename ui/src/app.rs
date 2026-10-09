@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
 
 use anyhow::Result;
 use gpui::{point, prelude::*, px, size, App, Bounds, Global, WindowBounds, WindowOptions};
@@ -21,11 +21,14 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
     let metrics = Rc::new(RefCell::new(ShellMetrics::default()));
     let appearance = Rc::new(RefCell::new(config.appearance));
     let settings_inbox = config.settings_inbox.clone();
+    let row_detail_width = config.row_detail_width;
     let db_bridge = config.db_bridge.clone();
     let connections = config.connections.clone();
     let workspace_sessions = Arc::clone(&config.workspace_sessions);
     let window_open_queue = config.window_open_queue.clone();
     let initial_connection = config.initial_connection;
+    let pending_journals = config.pending_journals;
+    let journal_shutdown = config.journal_shutdown;
 
     let boot = Rc::new(ShellBoot {
         persistence: persistence.clone(),
@@ -35,6 +38,8 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
         connections: connections.clone(),
         workspace_sessions: workspace_sessions.clone(),
         window_open_queue: window_open_queue.clone(),
+        pending_journals: pending_journals.clone(),
+        journal_shutdown: journal_shutdown.clone(),
     });
 
     application().run({
@@ -57,8 +62,10 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
             );
             drop(prefs);
             bind_text_input_keys(cx);
+            crate::sql_editor::bind_sql_editor_keys(cx);
             crate::connections::bind_connection_keys(cx);
             crate::grid::init_grid_status(cx);
+            crate::grid::init_grid_settings(cx, row_detail_width, settings_inbox.clone());
 
             cx.set_global(WindowSpawner {
                 boot: boot.clone(),
@@ -66,10 +73,16 @@ pub fn run(config: LaunchConfig) -> Result<LaunchOutcome> {
             });
 
             let bounds = window_bounds_from_persistence(&persistence.borrow(), cx);
-            open_shell_window(cx, &boot, bounds, initial_connection);
+            open_shell_window(cx, &boot, bounds, initial_connection, pending_journals);
             cx.activate(true);
         }
     });
+
+    if let Ok(mut writers) = journal_shutdown.lock() {
+        for writer in writers.drain(..) {
+            writer.clear_on_exit();
+        }
+    }
 
     let window = persistence.borrow().clone();
     let shell_metrics = metrics.borrow().clone();
@@ -86,6 +99,7 @@ pub(crate) fn open_shell_window(
     boot: &Rc<ShellBoot>,
     bounds: WindowBounds,
     initial_connection: Option<ConnectionId>,
+    pending_journals: Vec<crate::launch::PendingJournal>,
 ) {
     let boot = boot.clone();
     cx.open_window(
@@ -112,6 +126,8 @@ pub(crate) fn open_shell_window(
                         boot.workspace_sessions.clone(),
                         boot.window_open_queue.clone(),
                         initial_connection,
+                        pending_journals,
+                        boot.journal_shutdown.clone(),
                         gallery,
                         cx,
                     )
@@ -127,6 +143,8 @@ pub(crate) fn open_shell_window(
                         boot.workspace_sessions.clone(),
                         boot.window_open_queue.clone(),
                         initial_connection,
+                        pending_journals,
+                        boot.journal_shutdown.clone(),
                         cx,
                     )
                 }

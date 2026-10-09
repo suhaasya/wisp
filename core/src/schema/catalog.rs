@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 
+use wisp_store::{ConnectionEngine, ConnectionProfile};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SchemaObjectId(pub u32);
 
@@ -42,12 +44,43 @@ pub struct SchemaObject {
     pub kind: SchemaObjectKind,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SchemaCatalog {
     pub connection_label: String,
     pub database: String,
     pub schemas: Vec<String>,
     pub objects: Vec<SchemaObject>,
+}
+
+/// Sidebar before any connection is selected.
+pub fn catalog_disconnected() -> SchemaCatalog {
+    SchemaCatalog {
+        connection_label: "Not connected".into(),
+        database: String::new(),
+        schemas: Vec::new(),
+        objects: Vec::new(),
+    }
+}
+
+/// Empty catalog while introspection runs (uses saved profile database/name).
+pub fn catalog_placeholder(profile: &ConnectionProfile) -> SchemaCatalog {
+    let database = profile.database.clone().unwrap_or_default();
+    let schemas = match profile.engine {
+        ConnectionEngine::PostgreSql => vec!["public".into()],
+        ConnectionEngine::MySql | ConnectionEngine::MariaDb => {
+            if database.is_empty() {
+                vec![]
+            } else {
+                vec![database.clone()]
+            }
+        }
+    };
+    SchemaCatalog {
+        connection_label: profile.name.clone(),
+        database,
+        schemas,
+        objects: Vec::new(),
+    }
 }
 
 impl SchemaCatalog {

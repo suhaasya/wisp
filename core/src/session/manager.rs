@@ -8,7 +8,7 @@ use std::{
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use tokio_util::sync::CancellationToken;
-use wisp_drivers::{DbDriver, ExecuteStats};
+use wisp_drivers::{DbDriver, ExecuteStats, PageRequest};
 use wisp_store::ConnectionId;
 
 use super::{
@@ -16,8 +16,11 @@ use super::{
     driver::{apply_read_only_session, open_main_driver, open_metadata_driver, SessionSecrets},
     error::SessionError,
     policy::check_write_allowed,
+    script::{RunScriptReport, ScriptStatement, StatementRunOutcome},
     state::{SessionEvent, SessionPhase, SessionSnapshot},
 };
+use crate::schema::load_schema_catalog;
+use crate::sql_editor::{format_explain_json, sql_is_explain, sql_returns_rows};
 struct ManagedSession {
     profile: wisp_store::ConnectionProfile,
     secrets: SessionSecrets,
@@ -201,6 +204,232 @@ impl SessionManager {
         result
     }
 
+    /// Run statements in one transaction; rolls back on any failure.
+    pub async fn commit_transaction(
+        manager: &Arc<tokio::sync::Mutex<Self>>,
+        id: ConnectionId,
+        statements: Vec<String>,
+        write_approved: bool,
+    ) -> Result<CommitTransactionOutcome, SessionError> {
+        let (read_only, safe_mode) = {
+            let guard = manager.lock().await;
+            let session = guard.sessions.get(&id).ok_or(SessionError::NotFound(id))?;
+            if session.phase != SessionPhase::Ready {
+                return Err(SessionError::NotReady {
+                    phase: session.phase,
+                });
+            }
+            (session.profile.read_only, session.profile.safe_mode)
+        };
+        for sql in &statements {
+            check_write_allowed(read_only, safe_mode, write_approved, sql)?;
+        }
+
+        let mut guard = manager.lock().await;
+        let session = guard.sessions.get_mut(&id).ok_or(SessionError::NotFound(id))?;
+        session.phase = SessionPhase::Busy;
+        let driver = session.main.as_mut().ok_or(SessionError::NotReady {
+            phase: SessionPhase::Reconnecting,
+        })?;
+        driver
+            .begin()
+            .map_err(|e| SessionError::Query(e.to_string()))?;
+        let mut rows_affected = 0u64;
+        for (index, sql) in statements.iter().enumerate() {
+            match driver.execute(sql) {
+                Ok(stats) => rows_affected += stats.rows_affected,
+                Err(err) => {
+                    let _ = driver.rollback();
+                    session.phase = SessionPhase::Ready;
+                    return Err(SessionError::CommitFailed {
+                        index,
+                        message: err.to_string(),
+                    });
+                }
+            }
+        }
+        if let Err(err) = driver.commit() {
+            let _ = driver.rollback();
+            session.phase = SessionPhase::Ready;
+            return Err(SessionError::CommitFailed {
+                index: statements.len().saturating_sub(1),
+                message: err.to_string(),
+            });
+        }
+        session.phase = SessionPhase::Ready;
+        Ok(CommitTransactionOutcome {
+            statements_run: statements.len(),
+            rows_affected,
+        })
+    }
+
+    pub async fn run_script(
+        manager: &Arc<tokio::sync::Mutex<Self>>,
+        id: ConnectionId,
+        statements: Vec<ScriptStatement>,
+        write_approved: bool,
+        cancel: CancellationToken,
+    ) -> Result<RunScriptReport, SessionError> {
+        let (read_only, safe_mode) = {
+            let guard = manager.lock().await;
+            let session = guard.sessions.get(&id).ok_or(SessionError::NotFound(id))?;
+            if session.phase != SessionPhase::Ready {
+                return Err(SessionError::NotReady {
+                    phase: session.phase,
+                });
+            }
+            (session.profile.read_only, session.profile.safe_mode)
+        };
+        for stmt in &statements {
+            check_write_allowed(read_only, safe_mode, write_approved, &stmt.sql)?;
+        }
+
+        let mut outcomes = Vec::with_capacity(statements.len());
+        for (stmt_index, stmt) in statements.into_iter().enumerate() {
+            if cancel.is_cancelled() {
+                return Ok(RunScriptReport {
+                    outcomes,
+                    cancelled: true,
+                });
+            }
+            let sql = stmt.sql.trim().to_string();
+            if sql.is_empty() {
+                continue;
+            }
+            let manager = Arc::clone(manager);
+            let byte_start = stmt.byte_start;
+            let outcome = tokio::task::spawn_blocking(move || {
+                manager.blocking_lock().run_one_statement(
+                    id,
+                    &sql,
+                    stmt_index,
+                    byte_start,
+                )
+            })
+            .await
+            .map_err(|e| SessionError::Query(e.to_string()))?;
+
+            let outcome = match outcome {
+                Ok(o) => o,
+                Err(SessionError::Query(message)) => {
+                    if message.contains("cancelled") {
+                        return Ok(RunScriptReport {
+                            outcomes,
+                            cancelled: true,
+                        });
+                    }
+                    StatementRunOutcome::Failed {
+                        stmt_index,
+                        byte_start,
+                        message,
+                    }
+                }
+                Err(err) => return Err(err),
+            };
+
+            outcomes.push(outcome.clone());
+            if matches!(outcome, StatementRunOutcome::Failed { .. }) {
+                break;
+            }
+            if cancel.is_cancelled() {
+                return Ok(RunScriptReport {
+                    outcomes,
+                    cancelled: true,
+                });
+            }
+        }
+        Ok(RunScriptReport {
+            outcomes,
+            cancelled: false,
+        })
+    }
+
+    pub fn cancel_in_flight_query(
+        manager: &Arc<tokio::sync::Mutex<Self>>,
+        id: ConnectionId,
+    ) {
+        let mut guard = manager.blocking_lock();
+        let Some(session) = guard.sessions.get_mut(&id) else {
+            return;
+        };
+        let Some(driver) = session.main.as_mut() else {
+            return;
+        };
+        if let Some(qid) = driver.in_flight_query() {
+            let _ = driver.cancel(qid);
+        }
+    }
+
+    pub fn query_page_blocking(
+        manager: &Arc<tokio::sync::Mutex<Self>>,
+        id: ConnectionId,
+        sql: &str,
+        offset: u64,
+        limit: u32,
+    ) -> Result<wisp_drivers::Page, SessionError> {
+        manager
+            .blocking_lock()
+            .query_page_locked(id, sql, offset, limit)
+    }
+
+    fn query_page_locked(
+        &mut self,
+        id: ConnectionId,
+        sql: &str,
+        offset: u64,
+        limit: u32,
+    ) -> Result<wisp_drivers::Page, SessionError> {
+        let session = self.sessions.get_mut(&id).ok_or(SessionError::NotFound(id))?;
+        if !matches!(session.phase, SessionPhase::Ready | SessionPhase::Busy) {
+            return Err(SessionError::NotReady {
+                phase: session.phase,
+            });
+        }
+        session.phase = SessionPhase::Busy;
+        let driver = session.main.as_mut().ok_or(SessionError::NotReady {
+            phase: SessionPhase::Reconnecting,
+        })?;
+        let result = driver
+            .query_paged(
+                sql,
+                PageRequest {
+                    limit: limit.max(1),
+                    offset,
+                },
+            )
+            .map_err(|e| SessionError::Query(e.to_string()));
+        session.phase = SessionPhase::Ready;
+        result
+    }
+
+    fn run_one_statement(
+        &mut self,
+        id: ConnectionId,
+        sql: &str,
+        stmt_index: usize,
+        byte_start: usize,
+    ) -> Result<StatementRunOutcome, SessionError> {
+        let session = self.sessions.get_mut(&id).ok_or(SessionError::NotFound(id))?;
+        session.phase = SessionPhase::Busy;
+        let driver = session.main.as_mut().ok_or(SessionError::NotReady {
+            phase: SessionPhase::Reconnecting,
+        })?;
+
+        let driver = driver.as_mut();
+        let result = if sql_is_explain(sql) {
+            run_explain_on_driver(driver, sql, stmt_index, byte_start)
+        } else if sql_returns_rows(sql) {
+            run_query_on_driver(driver, sql, stmt_index, byte_start)
+        } else {
+            run_execute_on_driver(driver, sql, stmt_index, byte_start)
+        };
+
+        if let Some(session) = self.sessions.get_mut(&id) {
+            session.phase = SessionPhase::Ready;
+        }
+        result
+    }
+
     pub async fn snapshot(
         manager: &Arc<tokio::sync::Mutex<Self>>,
         id: ConnectionId,
@@ -334,20 +563,24 @@ impl SessionManager {
     }
 
     pub async fn ensure_metadata(
-        &mut self,
+        manager: &Arc<tokio::sync::Mutex<Self>>,
         id: ConnectionId,
         runtime: tokio::runtime::Handle,
     ) -> Result<(), SessionError> {
-        if self
-            .sessions
-            .get(&id)
-            .map(|s| s.metadata.is_some())
-            .unwrap_or(false)
         {
-            return Ok(());
+            let guard = manager.lock().await;
+            if guard
+                .sessions
+                .get(&id)
+                .map(|s| s.metadata.is_some())
+                .unwrap_or(false)
+            {
+                return Ok(());
+            }
         }
         let (profile, secrets) = {
-            let session = self.sessions.get(&id).ok_or(SessionError::NotFound(id))?;
+            let guard = manager.lock().await;
+            let session = guard.sessions.get(&id).ok_or(SessionError::NotFound(id))?;
             (session.profile.clone(), session.secrets.clone())
         };
         let driver = tokio::task::spawn_blocking(move || {
@@ -355,10 +588,41 @@ impl SessionManager {
         })
         .await
         .map_err(|e| SessionError::Connect(e.to_string()))??;
-        if let Some(session) = self.sessions.get_mut(&id) {
+        if let Some(session) = manager.lock().await.sessions.get_mut(&id) {
             session.metadata = Some(driver);
         }
         Ok(())
+    }
+
+    pub fn fetch_schema_catalog_blocking(
+        manager: &Arc<tokio::sync::Mutex<Self>>,
+        id: ConnectionId,
+    ) -> Result<crate::schema::SchemaLoadResult, SessionError> {
+        manager.blocking_lock().fetch_schema_catalog_locked(id)
+    }
+
+    fn fetch_schema_catalog_locked(
+        &mut self,
+        id: ConnectionId,
+    ) -> Result<crate::schema::SchemaLoadResult, SessionError> {
+        let session = self.sessions.get_mut(&id).ok_or(SessionError::NotFound(id))?;
+        if !matches!(session.phase, SessionPhase::Ready | SessionPhase::Busy) {
+            return Err(SessionError::NotReady {
+                phase: session.phase,
+            });
+        }
+        let profile = session.profile.clone();
+        let engine = profile.engine;
+        let driver = session
+            .metadata
+            .as_mut()
+            .map(|d| d.as_mut() as &mut dyn DbDriver)
+            .or_else(|| session.main.as_mut().map(|d| d.as_mut() as &mut dyn DbDriver))
+            .ok_or(SessionError::NotReady {
+                phase: SessionPhase::Reconnecting,
+            })?;
+        load_schema_catalog(driver, engine, &profile)
+            .map_err(|e| SessionError::Query(e.to_string()))
     }
 }
 
@@ -413,6 +677,91 @@ fn spawn_keepalive(
             }
         }
     });
+}
+
+fn run_execute_on_driver(
+    driver: &mut dyn DbDriver,
+    sql: &str,
+    stmt_index: usize,
+    byte_start: usize,
+) -> Result<StatementRunOutcome, SessionError> {
+    let stats = driver
+        .execute(sql)
+        .map_err(|e| SessionError::Query(e.to_string()))?;
+    Ok(StatementRunOutcome::Message {
+        stmt_index,
+        byte_start,
+        rows_affected: stats.rows_affected,
+        text: format!("{} row(s) affected", stats.rows_affected),
+    })
+}
+
+fn run_query_on_driver(
+    driver: &mut dyn DbDriver,
+    sql: &str,
+    stmt_index: usize,
+    byte_start: usize,
+) -> Result<StatementRunOutcome, SessionError> {
+    let page = driver
+        .query_paged(
+            sql,
+            PageRequest {
+                limit: 200,
+                offset: 0,
+            },
+        )
+        .map_err(|e| SessionError::Query(e.to_string()))?;
+    let columns = page.columns.clone();
+    let row_count = infer_row_count(&page);
+    Ok(StatementRunOutcome::ResultSet {
+        stmt_index,
+        byte_start,
+        sql: sql.to_string(),
+        columns,
+        row_count,
+    })
+}
+
+fn run_explain_on_driver(
+    driver: &mut dyn DbDriver,
+    sql: &str,
+    stmt_index: usize,
+    byte_start: usize,
+) -> Result<StatementRunOutcome, SessionError> {
+    let page = driver
+        .query_paged(
+            sql,
+            PageRequest {
+                limit: 1,
+                offset: 0,
+            },
+        )
+        .map_err(|e| SessionError::Query(e.to_string()))?;
+    let raw = page.text_at(0, 0).unwrap_or("").to_string();
+    let plan_text = format_explain_json(&raw);
+    Ok(StatementRunOutcome::Explain {
+        stmt_index,
+        byte_start,
+        plan_text,
+    })
+}
+
+fn infer_row_count(page: &wisp_drivers::Page) -> crate::pager::RowCount {
+    use crate::pager::RowCount;
+    if page.row_count == 0 {
+        return RowCount::Exact(0);
+    }
+    if page.row_count < 200 {
+        RowCount::Exact(page.row_count as u64)
+    } else {
+        RowCount::Unknown
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitTransactionOutcome {
+    pub statements_run: usize,
+    pub rows_affected: u64,
 }
 
 #[derive(Debug, Clone)]

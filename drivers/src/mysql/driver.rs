@@ -159,6 +159,14 @@ impl DbDriver for MysqlDriver {
         self.run(cancel_query(state, config, query))
     }
 
+    fn in_flight_query(&self) -> Option<QueryId> {
+        self.state
+            .blocking_lock()
+            .active
+            .as_ref()
+            .map(|a| a.id)
+    }
+
     fn begin(&mut self) -> Result<(), DriverError> {
         let state = Arc::clone(&self.state);
         self.run(async move {
@@ -403,9 +411,9 @@ async fn load_server_info(conn: &mut Conn) -> Result<ServerInfo, DriverError> {
 }
 
 fn map_mysql_err(err: mysql_async::Error) -> DriverError {
-    let message = err.to_string();
-    if message.contains("Query execution was interrupted") || message.contains("1317") {
+    let detail = err.to_string();
+    if detail.contains("Query execution was interrupted") || detail.contains("1317") {
         return DriverError::Cancelled;
     }
-    DriverError::user("MySQL error", message)
+    DriverError::user(format!("MySQL error: {detail}"), detail)
 }

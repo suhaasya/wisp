@@ -264,6 +264,7 @@ fn build_draft(
         environment: FormEnvironment::Dev,
         read_only: false,
         safe_mode: false,
+        query_history_enabled: true,
         ssl_mode,
         ssl_trust: wisp_store::SslTrustStore::System,
         ssl_ca_file: String::new(),

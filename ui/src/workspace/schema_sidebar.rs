@@ -10,7 +10,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, UniformListScrollHandle, WeakEntity, Window,
 };
 use wisp_core::{
-    build_sidebar_rows, demo_catalog_shop, fuzzy_match_highlight_indices, SchemaCatalog,
+    build_sidebar_rows, catalog_disconnected, fuzzy_match_highlight_indices, SchemaCatalog,
     SchemaObjectKind, SchemaSidebarPrefs, SchemaSidebarStateStore, SidebarRow,
 };
 use wisp_core::ConnectionId;
@@ -20,6 +20,14 @@ use crate::theme::{self, ResolvedTheme};
 
 const ROW_H: f32 = 28.0;
 const GROUP_ROW_H: f32 = 30.0;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SchemaLoadState {
+    Idle,
+    Loading,
+    Ready,
+    Failed(SharedString),
+}
 
 pub struct SchemaSidebar {
     focus_handle: FocusHandle,
@@ -35,16 +43,15 @@ pub struct SchemaSidebar {
     selected_row: usize,
     /// Stable key for expand/collapse prefs before a session is bound.
     demo_connection_id: ConnectionId,
+    load_state: SchemaLoadState,
 }
 
 impl SchemaSidebar {
     pub fn new(cx: &mut Context<Self>, workspace: WeakEntity<super::view::WorkspaceView>) -> Self {
         let theme = theme::read_global(cx).resolved().clone();
-        let catalog = Rc::new(demo_catalog_shop());
+        let catalog = Rc::new(catalog_disconnected());
         let mut prefs = SchemaSidebarPrefs::default();
-        if prefs.schema.is_empty() {
-            prefs.schema = catalog.schemas.first().cloned().unwrap_or_else(|| "public".into());
-        }
+        prefs.schema = "public".into();
         prefs.expanded.insert(SchemaObjectKind::Tables);
         prefs.expanded.insert(SchemaObjectKind::Views);
         let filter_input = cx.new(|cx| {
@@ -74,11 +81,25 @@ impl SchemaSidebar {
             rows,
             selected_row: 0,
             demo_connection_id: ConnectionId::new_v7(),
+            load_state: SchemaLoadState::Idle,
         }
     }
 
     fn store_id(&self) -> ConnectionId {
         self.connection_id.unwrap_or(self.demo_connection_id)
+    }
+
+    pub fn catalog(&self) -> Rc<SchemaCatalog> {
+        Rc::clone(&self.catalog)
+    }
+
+    pub fn active_schema(&self) -> String {
+        let id = self.store_id();
+        self.prefs_store
+            .state(id)
+            .prefs
+            .schema
+            .clone()
     }
 
     pub fn set_connection(&mut self, id: ConnectionId, label: &SharedString, cx: &mut Context<Self>) {
@@ -88,6 +109,27 @@ impl SchemaSidebar {
         let mut catalog = (*self.catalog).clone();
         catalog.connection_label = label.to_string();
         self.catalog = Rc::new(catalog);
+        self.rebuild_rows(id, cx);
+    }
+
+    /// Replace demo/fixture catalog with live introspection (LUM-021).
+    pub fn set_load_state(&mut self, state: SchemaLoadState, cx: &mut Context<Self>) {
+        self.load_state = state;
+        self.rebuild_rows(self.store_id(), cx);
+    }
+
+    pub fn set_catalog(&mut self, catalog: Rc<SchemaCatalog>, cx: &mut Context<Self>) {
+        self.catalog = catalog;
+        let id = self.store_id();
+        let prefs = &mut self.prefs_store.state_mut(id).prefs;
+        if !self.catalog.schemas.iter().any(|s| s == &prefs.schema) {
+            prefs.schema = self
+                .catalog
+                .schemas
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "public".into());
+        }
         self.rebuild_rows(id, cx);
     }
 
@@ -149,10 +191,13 @@ impl SchemaSidebar {
             .selected_row = index;
         self.selected_row = index;
         if let SidebarRow::Object { name, .. } = row {
+            let workspace = self.workspace.clone();
             let name = SharedString::from(name.clone());
-            self.workspace
-                .update(cx, |ws, cx| ws.open_table_data(name, cx))
-                .ok();
+            cx.defer(move |cx| {
+                workspace
+                    .update(cx, |ws, cx| ws.open_table_data(name, cx))
+                    .ok();
+            });
         }
         cx.notify();
     }
@@ -180,12 +225,33 @@ impl Render for SchemaSidebar {
             .connection_id
             .map(|id| self.prefs_store.state(id).prefs.clone())
             .unwrap_or_else(SchemaSidebarPrefs::default);
-        let db_label = self.catalog.connection_label.clone();
-        let schema_label = prefs.schema.clone();
+        let db_label = if self.catalog.database.is_empty() {
+            self.catalog.connection_label.clone()
+        } else {
+            self.catalog.database.clone()
+        };
+        let schema_label = if prefs.schema.is_empty() {
+            "—".into()
+        } else {
+            prefs.schema.clone()
+        };
         let rows = Rc::clone(&self.rows);
         let scroll = self.scroll.clone();
         let selected = self.selected_row;
         let filter_query = self.filter_text.clone();
+        let empty_hint = match &self.load_state {
+            SchemaLoadState::Idle if self.connection_id.is_none() => {
+                "Select a connection to browse schema.".into()
+            }
+            SchemaLoadState::Loading => "Loading schema from database…".into(),
+            SchemaLoadState::Failed(msg) => format!("Schema load failed: {msg}"),
+            SchemaLoadState::Ready if rows.is_empty() => "No objects in this schema.".into(),
+            SchemaLoadState::Idle if self.connection_id.is_some() && rows.is_empty() => {
+                "Waiting for schema…".into()
+            }
+            _ => String::new(),
+        };
+        let show_empty = rows.is_empty() && !empty_hint.is_empty();
 
         div()
             .id("schema-sidebar")
@@ -242,6 +308,16 @@ impl Render for SchemaSidebar {
                     )
                     .child(self.filter_input.clone()),
             )
+            .children(if show_empty {
+                vec![div()
+                    .flex_1()
+                    .p_3()
+                    .text_sm()
+                    .text_color(c.ink3.clone())
+                    .child(empty_hint)]
+            } else {
+                vec![]
+            })
             .child(
                 uniform_list(
                     "schema-tree",

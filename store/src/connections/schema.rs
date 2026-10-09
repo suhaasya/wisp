@@ -38,6 +38,10 @@ fn default_version() -> u32 {
     CONNECTIONS_VERSION
 }
 
+fn default_query_history_enabled() -> bool {
+    true
+}
+
 impl Default for ConnectionsFile {
     fn default() -> Self {
         Self {
@@ -83,6 +87,8 @@ pub struct ConnectionProfile {
     pub read_only: bool,
     #[serde(default)]
     pub safe_mode: bool,
+    #[serde(default = "default_query_history_enabled")]
+    pub query_history_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colour: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -107,6 +113,7 @@ impl ConnectionProfile {
             env_tag: EnvironmentTag::default(),
             read_only: false,
             safe_mode: false,
+            query_history_enabled: true,
             colour: None,
             last_used_unix: None,
         }

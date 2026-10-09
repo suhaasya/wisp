@@ -4,7 +4,10 @@
 //! drivers, transport, UI, or session orchestration in `wisp-core` (avoid cycles).
 
 pub mod connections;
+pub mod history;
+pub mod journal;
 pub mod paths;
+pub mod snippets;
 pub mod secrets;
 pub mod settings;
 pub mod window;
@@ -17,7 +20,19 @@ pub use connections::{
     TransportKind,
     CONNECTIONS_VERSION,
 };
+pub use history::{
+    append_history_entry, count_valid_entries, rotate_if_needed, search_history_file,
+    sql_for_history, HistoryWriteError, QueryHistoryEntry, QueryHistoryStatus,
+    HISTORY_MAX_BYTES,
+};
+pub use journal::{
+    discard_pending, json_has_credential_keys, list_pending_journals, read_journal,
+    remove_journal, write_journal_atomic, JournalCellEdit, JournalInsertedRow, JournalRowKey,
+    JournalTab, JournalTabKind, JournalWorkspace, JournalWriter, StagedCellEditRow,
+    StagedGridSnapshot, WindowJournal, JOURNAL_VERSION,
+};
 pub use paths::WispPaths;
+pub use snippets::{Snippet, SnippetStore, SnippetStoreError, SnippetsFile, SNIPPETS_VERSION};
 pub use secrets::{
     open_secret_store, BlockingSecretStore, ConnectionSecretPolicy, MockSecretStore,
     OpenSecretStoreOptions, Secret, SecretBackendKind, SecretError, SecretKind, SecretStore,

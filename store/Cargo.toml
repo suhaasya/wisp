@@ -29,7 +29,7 @@ chacha20poly1305 = { version = "0.10", default-features = false, features = [
 ] }
 rand = { version = "0.8", default-features = false, features = ["std_rng", "getrandom"] }
 zeroize = { version = "1.8", features = ["derive"] }
-uuid = { version = "1.11", default-features = false, features = ["serde", "v7", "std"] }
+uuid = { version = "1.11", default-features = false, features = ["serde", "v4", "v7", "std"] }
 
 [dev-dependencies]
 proptest = "1.6"

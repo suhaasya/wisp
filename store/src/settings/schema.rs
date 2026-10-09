@@ -105,10 +105,16 @@ pub struct KeybindingEntry {
     pub keystroke: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GridSettings {
     #[serde(default = "default_grid_page_size")]
     pub page_size: u32,
+    #[serde(default = "default_row_detail_width")]
+    pub row_detail_width: f32,
+}
+
+fn default_row_detail_width() -> f32 {
+    300.0
 }
 
 fn default_grid_page_size() -> u32 {
@@ -119,6 +125,7 @@ impl Default for GridSettings {
     fn default() -> Self {
         Self {
             page_size: default_grid_page_size(),
+            row_detail_width: default_row_detail_width(),
         }
     }
 }

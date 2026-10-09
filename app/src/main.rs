@@ -11,14 +11,15 @@ use std::{
 use clap::Parser;
 use wisp_core::{ConnectionHub, ConnectionHubError, DbBridge, DbRuntimeConfig, WorkspaceSessionStore};
 use wisp_store::{
+    list_pending_journals,
     settings::{spawn_settings_watcher, SettingsStore, SettingsWatchEvent},
     window::WindowState,
     AppearanceSettings, ConnectionsLoadError, DensitySetting, MonoFontSetting, Settings,
     ThemeModeSetting, UiFontSetting, WispPaths,
 };
 use wisp_ui::{
-    AppearanceConfig, Density, LaunchConfig, MonoFontChoice, SettingsInbox, SettingsToast,
-    ThemeMode, UiFontChoice, WindowGeometry, WindowOpenQueue, WindowPersistence,
+    AppearanceConfig, Density, LaunchConfig, MonoFontChoice, PendingJournal, SettingsInbox,
+    SettingsToast, ThemeMode, UiFontChoice, WindowGeometry, WindowOpenQueue, WindowPersistence,
 };
 
 #[derive(Parser)]
@@ -51,15 +52,26 @@ fn main() -> anyhow::Result<()> {
     let connections = load_connection_hub(&paths, secrets, &settings_inbox);
     start_settings_watcher(Arc::clone(&store), settings_inbox.clone());
 
-    let appearance = {
+    let (appearance, row_detail_width) = {
         let guard = store.lock().expect("settings store lock");
-        appearance_from_settings(guard.get().appearance.clone())
+        let settings = guard.get();
+        (
+            appearance_from_settings(settings.appearance.clone()),
+            settings.grid.row_detail_width,
+        )
     };
 
     let workspace_sessions = std::sync::Arc::new(std::sync::Mutex::new(WorkspaceSessionStore::load(
         &paths,
     )));
     let workspace_sessions_for_save = std::sync::Arc::clone(&workspace_sessions);
+
+    let pending_journals = list_pending_journals(&paths.journal_dir())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(path, doc)| PendingJournal { path, doc })
+        .collect::<Vec<_>>();
+    let journal_shutdown = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     let config = LaunchConfig {
         window: WindowPersistence {
@@ -72,12 +84,15 @@ fn main() -> anyhow::Result<()> {
             }),
         },
         appearance,
+        row_detail_width,
         settings_inbox: Some(settings_inbox.clone()),
         db_bridge: Some(Arc::clone(&db_bridge)),
         connections,
         workspace_sessions,
         window_open_queue: WindowOpenQueue::default(),
         initial_connection: None,
+        pending_journals,
+        journal_shutdown: std::sync::Arc::clone(&journal_shutdown),
     };
 
     let outcome = wisp_ui::run(config)?;
@@ -85,7 +100,12 @@ fn main() -> anyhow::Result<()> {
 
     {
         let mut guard = store.lock().expect("settings store lock");
-        let merged = merge_appearance(guard.get().clone(), &outcome.appearance);
+        let mut merged = merge_appearance(guard.get().clone(), &outcome.appearance);
+        if let Ok(inbox) = settings_inbox.lock() {
+            if let Some(w) = inbox.row_detail_width {
+                merged.grid.row_detail_width = w;
+            }
+        }
         guard.set(merged);
         guard.save()?;
     }

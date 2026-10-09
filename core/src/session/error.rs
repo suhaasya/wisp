@@ -16,6 +16,11 @@ pub enum SessionError {
     Connect(String),
     #[error("query failed: {0}")]
     Query(String),
+    #[error("commit failed at statement {index}: {message} (rolled back)")]
+    CommitFailed {
+        index: usize,
+        message: String,
+    },
     #[error("session closed")]
     Closed,
 }

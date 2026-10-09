@@ -50,7 +50,9 @@ impl SequentialPageSource {
     }
 
     fn columns(&self) -> Vec<ColumnMeta> {
-        let mut cols = vec![ColumnMeta::new("id", "bigint")];
+        let mut id = ColumnMeta::new("id", "bigint");
+        id.is_pk = true;
+        let mut cols = vec![id];
         for c in 0..self.payload_columns {
             cols.push(ColumnMeta::new(format!("col_{c}"), "text"));
         }

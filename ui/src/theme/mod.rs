@@ -6,6 +6,8 @@ mod global;
 mod resolve;
 mod system;
 mod tokens;
+
+pub use resolve::SyntaxColors;
 mod typography;
 
 pub use contrast::{evaluate_pair, wcag_pairs, ContrastPair, ContrastResult};

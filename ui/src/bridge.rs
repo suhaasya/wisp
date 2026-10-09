@@ -1,5 +1,7 @@
 //! GPUI helpers for the tokio DB bridge (LUM-010).
 
+pub mod sql_fetch;
+
 use std::sync::Arc;
 
 use gpui::{App, Context, Global, Task, WeakEntity};

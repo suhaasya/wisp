@@ -3,4 +3,4 @@
 mod schema_sidebar;
 mod view;
 
-pub use view::WorkspaceView;
+pub use view::{WorkspaceTab, WorkspaceTabKind, WorkspaceView};

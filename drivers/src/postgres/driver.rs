@@ -163,6 +163,13 @@ impl DbDriver for PostgresDriver {
         self.run(cancel_query(state, query))
     }
 
+    fn in_flight_query(&self) -> Option<QueryId> {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|g| g.active.as_ref().map(|a| a.id))
+    }
+
     fn begin(&mut self) -> Result<(), DriverError> {
         let state = Arc::clone(&self.state);
         self.run(async move {

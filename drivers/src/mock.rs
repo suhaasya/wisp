@@ -25,6 +25,7 @@ pub struct MockDriver {
     columns: usize,
     cancel_flags: HashMap<QueryId, AtomicBool>,
     active_query: Option<QueryId>,
+    tx_stmt_index: u32,
 }
 
 impl Default for MockDriver {
@@ -37,6 +38,7 @@ impl Default for MockDriver {
             columns: 10,
             cancel_flags: HashMap::new(),
             active_query: None,
+            tx_stmt_index: 0,
         }
     }
 }
@@ -82,8 +84,22 @@ impl DbDriver for MockDriver {
 
     fn execute(&mut self, sql: &str) -> Result<ExecuteStats, DriverError> {
         self.ensure_connected()?;
-        let _ = sql;
-        Ok(ExecuteStats { rows_affected: 0 })
+        if sql.contains("WISP_SYNTAX_ERROR") {
+            return Err(DriverError::user(
+                "syntax error",
+                "simulated syntax error for LUM-033 test",
+            ));
+        }
+        if self.in_tx {
+            self.tx_stmt_index += 1;
+            if sql.contains("WISP_TEST_FAIL_SECOND") && self.tx_stmt_index == 2 {
+                return Err(DriverError::user(
+                    "constraint violation",
+                    "simulated failure for LUM-029 test",
+                ));
+            }
+        }
+        Ok(ExecuteStats { rows_affected: 1 })
     }
 
     fn query_paged(&mut self, sql: &str, request: PageRequest) -> Result<Page, DriverError> {
@@ -91,9 +107,29 @@ impl DbDriver for MockDriver {
         if request.limit == 0 {
             return Err(DriverError::InvalidPage);
         }
-        let _ = sql;
         let query_id = self.next_query_id();
         let cancel = self.cancel_flags.get(&query_id).expect("cancel slot");
+
+        if sql.trim().to_ascii_uppercase().starts_with("EXPLAIN") {
+            let plan = mock_explain_json();
+            let columns = vec![ColumnMeta::new("QUERY PLAN", "json")];
+            let mut builder = Page::builder(columns);
+            builder
+                .push_text_row(&[plan.as_str()])
+                .map_err(|_| DriverError::InvalidPage)?;
+            self.active_query = None;
+            return Ok(builder.finish());
+        }
+
+        if sql.contains("WISP_MOCK_SLOW") {
+            for _ in 0..500 {
+                if cancel.load(Ordering::Relaxed) {
+                    self.active_query = None;
+                    return Err(DriverError::Cancelled);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
 
         let col_count = self.columns;
         let columns: Vec<_> = (0..col_count)
@@ -105,6 +141,7 @@ impl DbDriver for MockDriver {
         let end = (start + request.limit as usize).min(self.total_rows);
         for row in start..end {
             if cancel.load(Ordering::Relaxed) {
+                self.active_query = None;
                 return Err(DriverError::Cancelled);
             }
             let texts: Vec<String> = (0..col_count)
@@ -116,6 +153,10 @@ impl DbDriver for MockDriver {
 
         self.active_query = None;
         Ok(builder.finish())
+    }
+
+    fn in_flight_query(&self) -> Option<QueryId> {
+        self.active_query
     }
 
     fn cancel(&mut self, query: QueryId) -> Result<(), DriverError> {
@@ -133,6 +174,7 @@ impl DbDriver for MockDriver {
     fn begin(&mut self) -> Result<(), DriverError> {
         self.ensure_connected()?;
         self.in_tx = true;
+        self.tx_stmt_index = 0;
         Ok(())
     }
 
@@ -162,6 +204,10 @@ impl DbDriver for MockDriver {
     fn dialect(&self) -> &dyn Dialect {
         &self.dialect
     }
+}
+
+fn mock_explain_json() -> String {
+    r#"{"Plan":{"Node Type":"Seq Scan","Relation Name":"users","Total Cost":12.5,"Plans":[{"Node Type":"Index Scan","Total Cost":4.2,"Actual Total Time":0.08}]}}"#.into()
 }
 
 #[cfg(test)]

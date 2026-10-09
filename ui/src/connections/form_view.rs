@@ -691,6 +691,17 @@ fn general_tab(
                 cx.notify();
             },
         ))
+        .child(toggle(
+            cx,
+            "query-history",
+            "Save query history",
+            draft.query_history_enabled,
+            theme,
+            |this, _, cx| {
+                this.draft.query_history_enabled = !this.draft.query_history_enabled;
+                cx.notify();
+            },
+        ))
 }
 
 fn advanced_tab(c: &theme::ResolvedColors, draft: &ConnectionFormDraft) -> impl IntoElement {
